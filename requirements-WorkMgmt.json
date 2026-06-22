@@ -1,0 +1,799 @@
+{
+  "module": "WorkMgmt",
+  "source": "demo/requirements.md",
+  "section": "作品",
+  "total": 63,
+  "requirements": [
+    {
+      "title": "作品ID字段",
+      "description": "作品表中的唯一标识符，自增主键",
+      "priority": "P0",
+      "category": "数据",
+      "acceptance": [
+        "id字段是自增整数类型",
+        "id字段作为主键",
+        "每个作品有唯一id值"
+      ],
+      "id": "REQ-001",
+      "enabled": false
+    },
+    {
+      "title": "作品标题字段",
+      "description": "存储作品名称的字段",
+      "priority": "P0",
+      "category": "数据",
+      "acceptance": [
+        "title字段为字符串类型",
+        "title字段可存储至少100个字符",
+        "title字段不允许为空"
+      ],
+      "id": "REQ-002",
+      "enabled": false
+    },
+    {
+      "title": "作品分类字段",
+      "description": "存储作品所属分类的字段",
+      "priority": "P0",
+      "category": "数据",
+      "acceptance": [
+        "category字段为字符串类型",
+        "category字段可存储至少50个字符",
+        "category字段不允许为空"
+      ],
+      "id": "REQ-003",
+      "enabled": false
+    },
+    {
+      "title": "作品描述字段",
+      "description": "存储作品的详细描述信息",
+      "priority": "P0",
+      "category": "数据",
+      "acceptance": [
+        "description字段为文本类型",
+        "description字段可存储大量文本",
+        "description字段允许为空"
+      ],
+      "id": "REQ-004",
+      "enabled": false
+    },
+    {
+      "title": "技术栈字段",
+      "description": "存储作品使用的技术栈信息",
+      "priority": "P1",
+      "category": "数据",
+      "acceptance": [
+        "tech_stack字段为字符串类型",
+        "tech_stack字段可存储至少200个字符",
+        "tech_stack字段允许为空"
+      ],
+      "id": "REQ-005",
+      "enabled": false
+    },
+    {
+      "title": "作品价格字段",
+      "description": "存储作品的报价信息",
+      "priority": "P1",
+      "category": "数据",
+      "acceptance": [
+        "price字段为数值类型",
+        "price字段支持小数点后两位",
+        "price字段允许为空"
+      ],
+      "id": "REQ-006",
+      "enabled": false
+    },
+    {
+      "title": "作品演示URL字段",
+      "description": "存储作品在线演示地址",
+      "priority": "P1",
+      "category": "数据",
+      "acceptance": [
+        "demo_url字段为字符串类型",
+        "demo_url字段可存储有效的URL格式",
+        "demo_url字段允许为空"
+      ],
+      "id": "REQ-007",
+      "enabled": false
+    },
+    {
+      "title": "作品封面URL字段",
+      "description": "存储作品封面图片的URL地址",
+      "priority": "P1",
+      "category": "数据",
+      "acceptance": [
+        "cover_url字段为字符串类型",
+        "cover_url字段可存储有效的URL格式",
+        "cover_url字段允许为空"
+      ],
+      "id": "REQ-008",
+      "enabled": false
+    },
+    {
+      "title": "作品截图URL字段",
+      "description": "存储作品多个截图的URL，以逗号分隔",
+      "priority": "P2",
+      "category": "数据",
+      "acceptance": [
+        "images字段为字符串类型",
+        "images字段可存储多个URL并用逗号分隔",
+        "images字段允许为空"
+      ],
+      "id": "REQ-009",
+      "enabled": false
+    },
+    {
+      "title": "作品状态字段",
+      "description": "标识作品是上架还是下架状态",
+      "priority": "P0",
+      "category": "数据",
+      "acceptance": [
+        "status字段为整数类型",
+        "status值为0表示下架状态",
+        "status值为1表示上架状态",
+        "status字段有默认值1"
+      ],
+      "id": "REQ-010",
+      "enabled": false
+    },
+    {
+      "title": "作品排序权重字段",
+      "description": "控制作品展示顺序的权重字段，值越大越靠前",
+      "priority": "P1",
+      "category": "数据",
+      "acceptance": [
+        "sort字段为整数类型",
+        "sort值越大排序越靠前",
+        "sort字段有默认值0"
+      ],
+      "id": "REQ-011",
+      "enabled": false
+    },
+    {
+      "title": "作品创建时间字段",
+      "description": "记录作品创建的时间戳",
+      "priority": "P0",
+      "category": "数据",
+      "acceptance": [
+        "create_time字段为日期时间类型",
+        "创建作品时自动设置当前时间",
+        "create_time不允许为空"
+      ],
+      "id": "REQ-012",
+      "enabled": false
+    },
+    {
+      "title": "作品更新时间字段",
+      "description": "记录作品最后更新的时间戳",
+      "priority": "P0",
+      "category": "数据",
+      "acceptance": [
+        "update_time字段为日期时间类型",
+        "更新作品时自动设置当前时间",
+        "update_time不允许为空"
+      ],
+      "id": "REQ-013",
+      "enabled": false
+    },
+    {
+      "title": "管理员表结构",
+      "description": "在数据库中创建名为'admin'的表，用于存储管理员信息",
+      "priority": "P0",
+      "category": "数据",
+      "acceptance": [
+        "数据库中存在名为'admin'的表"
+      ],
+      "id": "REQ-014",
+      "enabled": false
+    },
+    {
+      "title": "管理员表id字段",
+      "description": "管理员表必须包含id字段，作为主键标识",
+      "priority": "P0",
+      "category": "数据",
+      "acceptance": [
+        "admin表中存在id字段",
+        "id字段设置为主键"
+      ],
+      "id": "REQ-015",
+      "enabled": false
+    },
+    {
+      "title": "管理员表username字段",
+      "description": "管理员表必须包含username字段，且该字段值必须唯一",
+      "priority": "P0",
+      "category": "数据",
+      "acceptance": [
+        "admin表中存在username字段",
+        "username字段设置了唯一约束"
+      ],
+      "id": "REQ-016",
+      "enabled": false
+    },
+    {
+      "title": "管理员表password字段",
+      "description": "管理员表必须包含password字段，用于存储管理员密码",
+      "priority": "P0",
+      "category": "数据",
+      "acceptance": [
+        "admin表中存在password字段"
+      ],
+      "id": "REQ-017",
+      "enabled": false
+    },
+    {
+      "title": "管理员表create_time字段",
+      "description": "管理员表必须包含create_time字段，用于记录管理员账号创建时间",
+      "priority": "P0",
+      "category": "数据",
+      "acceptance": [
+        "admin表中存在create_time字段"
+      ],
+      "id": "REQ-018",
+      "enabled": false
+    },
+    {
+      "title": "作品创建时间自动填充",
+      "description": "当插入新的作品记录时，create_time字段应自动填充当前时间",
+      "priority": "P0",
+      "category": "功能",
+      "acceptance": [
+        "新增作品记录时，create_time字段自动填充当前系统时间",
+        "create_time字段值精确到秒或毫秒（取决于系统定义的时间精度）",
+        "自动填充的时间与操作时间一致（误差在可接受范围内）"
+      ],
+      "id": "REQ-019",
+      "enabled": false
+    },
+    {
+      "title": "作品更新时间插入时自动填充",
+      "description": "当插入新的作品记录时，update_time字段应自动填充当前时间",
+      "priority": "P0",
+      "category": "功能",
+      "acceptance": [
+        "新增作品记录时，update_time字段自动填充当前系统时间",
+        "update_time字段值精确到秒或毫秒（取决于系统定义的时间精度）",
+        "自动填充的时间与操作时间一致（误差在可接受范围内）"
+      ],
+      "id": "REQ-020",
+      "enabled": false
+    },
+    {
+      "title": "作品更新时间更新时自动填充",
+      "description": "当更新已有作品记录时，update_time字段应自动填充当前时间",
+      "priority": "P0",
+      "category": "功能",
+      "acceptance": [
+        "更新作品记录时，update_time字段自动更新为当前系统时间",
+        "update_time字段值精确到秒或毫秒（取决于系统定义的时间精度）",
+        "自动更新的时间与操作时间一致（误差在可接受范围内）"
+      ],
+      "id": "REQ-021",
+      "enabled": false
+    },
+    {
+      "title": "使用MyBatis-Plus注解实现时间字段自动填充",
+      "description": "使用MyBatis-Plus的`@TableField(fill = FieldFill.INSERT / INSERT_UPDATE)`注解实现时间字段的自动填充",
+      "priority": "P1",
+      "category": "数据",
+      "acceptance": [
+        "create_time字段使用`@TableField(fill = FieldFill.INSERT)`注解",
+        "update_time字段使用`@TableField(fill = FieldFill.INSERT_UPDATE)`注解",
+        "注解配置正确，能实现预期的自动填充功能"
+      ],
+      "id": "REQ-022",
+      "enabled": false
+    },
+    {
+      "title": "Work实体类表名注解",
+      "description": "Work实体类必须使用@TableName注解指定对应的数据表",
+      "priority": "P0",
+      "category": "功能",
+      "acceptance": [
+        "Work实体类上有@TableName注解",
+        "注解中指定正确的数据表名称"
+      ],
+      "id": "REQ-023",
+      "enabled": false
+    },
+    {
+      "title": "Work实体类主键注解",
+      "description": "Work实体类的主键字段必须使用@TableId(type = IdType.AUTO)注解",
+      "priority": "P0",
+      "category": "功能",
+      "acceptance": [
+        "Work实体类的主键字段上有@TableId(type = IdType.AUTO)注解",
+        "主键字段能正确自动递增"
+      ],
+      "id": "REQ-024",
+      "enabled": false
+    },
+    {
+      "title": "Admin实体类表名注解",
+      "description": "Admin实体类必须使用@TableName注解指定对应的数据表",
+      "priority": "P0",
+      "category": "功能",
+      "acceptance": [
+        "Admin实体类上有@TableName注解",
+        "注解中指定正确的数据表名称"
+      ],
+      "id": "REQ-025",
+      "enabled": false
+    },
+    {
+      "title": "Admin实体类主键注解",
+      "description": "Admin实体类的主键字段必须使用@TableId(type = IdType.AUTO)注解",
+      "priority": "P0",
+      "category": "功能",
+      "acceptance": [
+        "Admin实体类的主键字段上有@TableId(type = IdType.AUTO)注解",
+        "主键字段能正确自动递增"
+      ],
+      "id": "REQ-026",
+      "enabled": false
+    },
+    {
+      "title": "实体类字段驼峰命名",
+      "description": "Work和Admin实体类的所有字段必须采用驼峰命名法",
+      "priority": "P1",
+      "category": "功能",
+      "acceptance": [
+        "Work实体类的所有字段名符合驼峰命名规范",
+        "Admin实体类的所有字段名符合驼峰命名规范"
+      ],
+      "id": "REQ-027",
+      "enabled": false
+    },
+    {
+      "title": "MyBatis-Plus下划线转驼峰配置",
+      "description": "MyBatis-Plus需要全局开启map-underscore-to-camel-case配置",
+      "priority": "P0",
+      "category": "功能",
+      "acceptance": [
+        "MyBatis-Plus配置文件中map-underscore-to-camel-case设置为true"
+      ],
+      "id": "REQ-028",
+      "enabled": false
+    },
+    {
+      "title": "数据库字段自动映射",
+      "description": "系统能够自动将数据库中的下划线命名字段映射到实体类的驼峰命名字段",
+      "priority": "P0",
+      "category": "功能",
+      "acceptance": [
+        "数据库查询时，下划线命名字段能正确映射到实体类的驼峰命名字段",
+        "数据库插入时，实体类的驼峰命名字段能正确映射到数据库的下划线命名字段"
+      ],
+      "id": "REQ-029",
+      "enabled": false
+    },
+    {
+      "title": "提供管理端作品列表接口",
+      "description": "系统需提供GET /api/admin/works接口用于获取管理端作品列表",
+      "priority": "P0",
+      "category": "接口",
+      "acceptance": [
+        "成功访问GET /api/admin/works接口",
+        "接口返回HTTP状态码200"
+      ],
+      "id": "REQ-030",
+      "enabled": false
+    },
+    {
+      "title": "接口JWT认证",
+      "description": "GET /api/admin/works接口需要JWT认证才能访问",
+      "priority": "P0",
+      "category": "安全",
+      "acceptance": [
+        "未提供JWT token时返回401错误",
+        "提供无效JWT token时返回403错误",
+        "提供有效JWT token时成功访问接口"
+      ],
+      "id": "REQ-031",
+      "enabled": false
+    },
+    {
+      "title": "返回所有作品数据",
+      "description": "接口需返回系统中所有作品数据，包括已下架状态的作品",
+      "priority": "P0",
+      "category": "数据",
+      "acceptance": [
+        "接口返回包含所有状态的作品数据",
+        "返回数据中包含status为'下架'的作品"
+      ],
+      "id": "REQ-032",
+      "enabled": false
+    },
+    {
+      "title": "不按status过滤作品",
+      "description": "接口返回数据时不按作品status字段进行过滤",
+      "priority": "P0",
+      "category": "数据",
+      "acceptance": [
+        "返回数据中包含所有不同status状态的作品"
+      ],
+      "id": "REQ-033",
+      "enabled": false
+    },
+    {
+      "title": "作品排序规则",
+      "description": "接口返回的作品需按sort字段和create_time字段降序排列",
+      "priority": "P1",
+      "category": "功能",
+      "acceptance": [
+        "作品列表按sort字段降序排列",
+        "sort值相同时，按create_time降序排列"
+      ],
+      "id": "REQ-034",
+      "enabled": false
+    },
+    {
+      "title": "作品列表不分页",
+      "description": "接口返回的所有作品数据不分页展示",
+      "priority": "P0",
+      "category": "功能",
+      "acceptance": [
+        "接口返回所有作品数据而不进行分页处理",
+        "返回数据中不包含分页信息（如total, page, pageSize等）"
+      ],
+      "id": "REQ-035",
+      "enabled": false
+    },
+    {
+      "title": "创建作品新增接口",
+      "description": "提供用于新增作品的 RESTful API 接口，使用 POST 方法，路径为 /api/admin/works，该接口需要进行 JWT 认证，接收 Work 对象作为请求体",
+      "priority": "P0",
+      "category": "接口",
+      "acceptance": [
+        "接口路径为 /api/admin/works",
+        "接口方法为 POST",
+        "接口需要有效的 JWT token 才能访问",
+        "无效 JWT token 返回 401 错误",
+        "接口正确接收 Work 对象作为请求体",
+        "请求体格式不正确时返回适当的错误响应"
+      ],
+      "id": "REQ-036",
+      "enabled": false
+    },
+    {
+      "title": "作品默认值处理",
+      "description": "在新增作品时，如果 status 字段为空，则默认设置为 1（上架状态）；如果 sort 字段为空，则默认设置为 0",
+      "priority": "P1",
+      "category": "功能",
+      "acceptance": [
+        "当请求体中 status 为空或未提供时，系统自动设置为 1",
+        "当请求体中 sort 为空或未提供时，系统自动设置为 0",
+        "当请求体中提供了 status 和 sort 值时，使用提供的值",
+        "数据库中保存的记录反映正确的默认值"
+      ],
+      "id": "REQ-037",
+      "enabled": false
+    },
+    {
+      "title": "统一成功响应",
+      "description": "当作品成功插入数据库后，接口返回统一的成功响应格式",
+      "priority": "P0",
+      "category": "接口",
+      "acceptance": [
+        "作品成功插入后返回 HTTP 状态码 200 或 201",
+        "返回的响应格式符合系统统一规范",
+        "响应中包含成功创建的作品信息",
+        "响应中不包含敏感信息"
+      ],
+      "id": "REQ-038",
+      "enabled": false
+    },
+    {
+      "title": "编辑作品API接口",
+      "description": "提供PUT方法的作品编辑API接口，路径为/api/admin/works/{id}",
+      "priority": "P0",
+      "category": "接口",
+      "acceptance": [
+        "接口路径为/api/admin/works/{id}",
+        "接口方法为PUT",
+        "接口需要JWT认证"
+      ],
+      "id": "REQ-039",
+      "enabled": false
+    },
+    {
+      "title": "URL ID覆盖请求体ID",
+      "description": "URL路径中的id参数应强制覆盖请求体中的id",
+      "priority": "P0",
+      "category": "接口",
+      "acceptance": [
+        "当URL中的id与请求体中的id不一致时，优先使用URL中的id",
+        "系统能够忽略请求体中的id参数"
+      ],
+      "id": "REQ-040",
+      "enabled": false
+    },
+    {
+      "title": "调用MyBatis-Plus更新方法",
+      "description": "调用MyBatis-Plus的updateById方法完成作品更新",
+      "priority": "P0",
+      "category": "接口",
+      "acceptance": [
+        "实现代码中调用了MyBatis-Plus的updateById方法",
+        "更新操作能够成功执行并持久化到数据库"
+      ],
+      "id": "REQ-041",
+      "enabled": false
+    },
+    {
+      "title": "备注字段数据类型与约束",
+      "description": "备注（remark）字段类型为字符串，最大长度200，允许为空",
+      "priority": "P1",
+      "category": "数据",
+      "acceptance": [
+        "数据库中remark字段为字符串类型",
+        "remark字段最大长度限制为200字符",
+        "remark字段允许为NULL",
+        "超过200字符的备注内容应被截断或返回错误"
+      ],
+      "id": "REQ-042",
+      "enabled": true
+    },
+    {
+      "title": "前端表单备注输入框",
+      "description": "前端表单中提供备注字段的文本输入框",
+      "priority": "P1",
+      "category": "UI",
+      "acceptance": [
+        "作品编辑表单中包含备注字段输入框",
+        "输入框为文本输入类型",
+        "输入框能够接受最多200字符的输入",
+        "输入框可以为空"
+      ],
+      "id": "REQ-043",
+      "enabled": false
+    },
+    {
+      "title": "后端处理备注字段",
+      "description": "后端入库/更新时随其他字段一并写入work表的remark列",
+      "priority": "P0",
+      "category": "数据",
+      "acceptance": [
+        "后端能够接收备注字段数据",
+        "后端将备注字段数据与其他字段一并处理",
+        "备注字段数据正确写入work表的remark列"
+      ],
+      "id": "REQ-044",
+      "enabled": true
+    },
+    {
+      "title": "创建删除作品API接口",
+      "description": "提供DELETE方法的路由 `/api/admin/works/{id}` 用于删除指定ID的作品",
+      "priority": "P0",
+      "category": "接口",
+      "acceptance": [
+        "接口路径为 `/api/admin/works/{id}`",
+        "接口方法为DELETE"
+      ],
+      "id": "REQ-045",
+      "enabled": false
+    },
+    {
+      "title": "删除作品接口JWT认证",
+      "description": "删除作品接口需要通过JWT进行身份验证，只有提供有效JWT token的请求才能访问该接口",
+      "priority": "P0",
+      "category": "安全",
+      "acceptance": [
+        "未提供JWT token的请求返回401状态码",
+        "提供无效JWT token的请求返回401状态码",
+        "提供有效JWT token的请求可以正常访问接口"
+      ],
+      "id": "REQ-046",
+      "enabled": false
+    },
+    {
+      "title": "物理删除作品记录",
+      "description": "删除作品接口需要实现物理删除功能，即从数据库中彻底移除作品记录",
+      "priority": "P0",
+      "category": "数据",
+      "acceptance": [
+        "调用接口后，数据库中对应ID的作品记录被完全移除",
+        "删除后的记录无法通过查询接口检索到"
+      ],
+      "id": "REQ-047",
+      "enabled": false
+    },
+    {
+      "title": "使用MyBatis-Plus实现删除功能",
+      "description": "删除作品接口使用MyBatis-Plus框架提供的deleteById方法实现删除功能",
+      "priority": "P1",
+      "category": "数据",
+      "acceptance": [
+        "接口实现中调用了MyBatis-Plus的deleteById方法",
+        "deleteById方法接收的作品ID参数与URL路径中的ID一致"
+      ],
+      "id": "REQ-048",
+      "enabled": false
+    },
+    {
+      "title": "删除作品接口响应处理",
+      "description": "删除作品接口需要提供适当的响应信息，包括成功删除和失败删除的情况",
+      "priority": "P1",
+      "category": "接口",
+      "acceptance": [
+        "成功删除时返回200状态码和成功消息",
+        "当作品ID不存在时返回404状态码",
+        "服务器错误时返回500状态码"
+      ],
+      "id": "REQ-049",
+      "enabled": false
+    },
+    {
+      "title": "作品状态切换接口",
+      "description": "提供用于切换作品上下架状态的REST API接口",
+      "priority": "P0",
+      "category": "接口",
+      "acceptance": [
+        "接口路径为PUT /api/admin/works/{id}/toggle",
+        "接口响应符合REST API规范"
+      ],
+      "id": "REQ-050",
+      "enabled": false
+    },
+    {
+      "title": "接口JWT认证",
+      "description": "接口需要JWT认证才能访问",
+      "priority": "P0",
+      "category": "安全",
+      "acceptance": [
+        "未提供JWT token时返回401状态码",
+        "提供无效JWT token时返回403状态码",
+        "提供有效JWT token时正常处理请求"
+      ],
+      "id": "REQ-051",
+      "enabled": false
+    },
+    {
+      "title": "作品状态翻转逻辑",
+      "description": "按id查出作品，将status在0/1之间翻转",
+      "priority": "P0",
+      "category": "功能",
+      "acceptance": [
+        "当作品status为0时，调用接口后变为1",
+        "当作品status为1时，调用接口后变为0",
+        "状态变更后的作品能正确保存到数据库"
+      ],
+      "id": "REQ-052",
+      "enabled": false
+    },
+    {
+      "title": "作品信息更新",
+      "description": "使用updateById方法将变更后的状态写回数据库",
+      "priority": "P0",
+      "category": "数据",
+      "acceptance": [
+        "调用接口后，数据库中对应作品的status值被正确更新",
+        "接口返回的数据与数据库中实际数据一致"
+      ],
+      "id": "REQ-053",
+      "enabled": false
+    },
+    {
+      "title": "无刷新状态切换",
+      "description": "接口支持前端上架/下架按钮的无刷新切换",
+      "priority": "P1",
+      "category": "功能",
+      "acceptance": [
+        "接口响应速度满足前端无刷新切换的需求",
+        "接口返回的数据格式满足前端渲染要求",
+        "接口调用后，前端能立即更新状态显示，无需刷新页面"
+      ],
+      "id": "REQ-054",
+      "enabled": false
+    },
+    {
+      "title": "异常作品处理",
+      "description": "处理作品不存在或状态异常的情况",
+      "priority": "P1",
+      "category": "功能",
+      "acceptance": [
+        "当作品id不存在时，返回404状态码",
+        "当作品status值不是0或1时，返回合适的错误信息",
+        "错误信息中包含明确的错误原因"
+      ],
+      "id": "REQ-055",
+      "enabled": false
+    },
+    {
+      "title": "标准API响应格式",
+      "description": "接口返回标准化的响应格式",
+      "priority": "P1",
+      "category": "接口",
+      "acceptance": [
+        "成功时返回包含更新后作品信息的JSON对象",
+        "失败时返回包含错误信息的JSON对象",
+        "响应中包含HTTP状态码，表示请求处理结果"
+      ],
+      "id": "REQ-056",
+      "enabled": false
+    },
+    {
+      "title": "接口响应性能",
+      "description": "接口响应时间需满足用户体验要求",
+      "priority": "P2",
+      "category": "性能",
+      "acceptance": [
+        "接口平均响应时间在200ms以内",
+        "高并发情况下接口稳定性良好"
+      ],
+      "id": "REQ-057",
+      "enabled": false
+    },
+    {
+      "title": "创建批量删除作品接口",
+      "description": "创建POST /api/admin/works/batch-delete接口，用于批量删除作品",
+      "priority": "P0",
+      "category": "接口",
+      "acceptance": [
+        "接口路径为/api/admin/works/batch-delete",
+        "接口支持POST请求方法"
+      ],
+      "id": "REQ-058",
+      "enabled": true
+    },
+    {
+      "title": "接口JWT认证",
+      "description": "批量删除作品接口需要JWT认证才能访问",
+      "priority": "P0",
+      "category": "安全",
+      "acceptance": [
+        "未提供JWT令牌时接口拒绝访问",
+        "提供有效JWT令牌时接口可正常访问"
+      ],
+      "id": "REQ-059",
+      "enabled": false
+    },
+    {
+      "title": "请求体格式验证",
+      "description": "接口请求体必须包含id数组，如{ \"ids\": [1, 2, 3] }",
+      "priority": "P1",
+      "category": "接口",
+      "acceptance": [
+        "接口能够解析包含id数组的JSON请求体",
+        "接口能正确获取到id数组参数"
+      ],
+      "id": "REQ-060",
+      "enabled": false
+    },
+    {
+      "title": "空id数组校验",
+      "description": "当请求体中的id数组为空时，返回参数错误提示",
+      "priority": "P1",
+      "category": "功能",
+      "acceptance": [
+        "传入空id数组时，接口返回参数错误提示",
+        "错误提示包含明确的错误信息"
+      ],
+      "id": "REQ-061",
+      "enabled": false
+    },
+    {
+      "title": "批量物理删除实现",
+      "description": "使用MyBatis-Plus的removeByIds方法批量物理删除指定ID的作品",
+      "priority": "P1",
+      "category": "数据",
+      "acceptance": [
+        "接口调用MyBatis-Plus的removeByIds方法",
+        "执行批量物理删除操作而非逻辑删除"
+      ],
+      "id": "REQ-062",
+      "enabled": false
+    },
+    {
+      "title": "成功响应格式",
+      "description": "全部删除成功后返回统一的成功响应格式",
+      "priority": "P1",
+      "category": "接口",
+      "acceptance": [
+        "删除成功后返回统一格式的成功响应",
+        "响应中包含操作成功的信息"
+      ],
+      "id": "REQ-063",
+      "enabled": false
+    }
+  ]
+}

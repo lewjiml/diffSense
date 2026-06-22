@@ -1,0 +1,11 @@
+{
+  "name": "ai-initial-review-demo",
+  "version": "1.0.0",
+  "description": "AI 初审工具 — 在测试验收前拦截代码缺陷",
+  "main": "ai-review.js",
+  "scripts": {
+    "review": "node ai-review.js",
+    "demo": "node ai-review.js samples/UserService.java"
+  },
+  "dependencies": {}
+}

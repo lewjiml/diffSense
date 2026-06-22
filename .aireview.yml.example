@@ -1,0 +1,11 @@
+# AI 需求扫描 — 模块→代码路径映射配置
+# 放在 git 仓库根目录，scan 命令会自动读取
+modules:
+  LargeCNV:
+    services:
+      - service: interpretation-service
+        paths:
+          - src/main/java/com/bgi/interpret/largecnv/
+      - service: report-service
+        paths:
+          - src/main/java/com/bgi/report/largecnv/

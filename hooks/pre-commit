@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# AI 初审 Git Hook —— pre-commit (Linux/Mac, bash 版)
+# 安装：cp hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+# 跳过：git commit --no-verify
+
+set -e
+
+# 支持的代码扩展名
+CODE_EXTS=("java" "py" "js" "ts" "go" "rs" "c" "cpp" "h" "jsx" "tsx" "kt" "scala" "rb" "php" "cs" "vue")
+
+# 找到项目根目录（含 ai_review.py 的位置）
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+AI_REVIEW="$SCRIPT_DIR/ai_review.py"
+
+if [ ! -f "$AI_REVIEW" ]; then
+    # 尝试从 git 仓库根目录找
+    REPO_ROOT="$(git rev-parse --show-toplevel)"
+    AI_REVIEW="$REPO_ROOT/ai_review.py"
+fi
+
+if [ ! -f "$AI_REVIEW" ]; then
+    echo "⚠️  未找到 ai_review.py，跳过 AI 初审。"
+    exit 0
+fi
+
+# 获取暂存区的代码文件
+STAGED=$(git diff --cached --name-only --diff-filter=ACM)
+
+if [ -z "$STAGED" ]; then
+    exit 0
+fi
+
+# 按扩展名过滤
+FILTERED=()
+for f in $STAGED; do
+    ext="${f##*.}"
+    for e in "${CODE_EXTS[@]}"; do
+        if [ "$ext" = "$e" ]; then
+            FILTERED+=("$f")
+            break
+        fi
+    done
+done
+
+if [ ${#FILTERED[@]} -eq 0 ]; then
+    exit 0
+fi
+
+echo "🔍 AI 初审：检查 ${#FILTERED[@]} 个暂存文件..."
+
+# 逐文件取 diff 写入临时文件，调用 ai_review.py 审查
+HAS_BLOCKING=0
+TMPFILE=$(mktemp /tmp/ai-review-XXXXXX.diff)
+trap "rm -f $TMPFILE" EXIT
+
+for f in "${FILTERED[@]}"; do
+    git diff --cached -- "$f" > "$TMPFILE"
+    if [ -s "$TMPFILE" ]; then
+        echo ""
+        echo "── $f ──"
+        if python3 "$AI_REVIEW" --diff "$TMPFILE"; then
+            :
+        else
+            HAS_BLOCKING=1
+        fi
+    fi
+done
+
+if [ $HAS_BLOCKING -ne 0 ]; then
+    echo ""
+    echo "❌ AI 初审发现阻断级问题，已阻止提交。"
+    echo "   修复后重试，或使用 git commit --no-verify 跳过审查。"
+    exit 1
+fi
+
+echo ""
+echo "✅ AI 初审通过。"
+exit 0
