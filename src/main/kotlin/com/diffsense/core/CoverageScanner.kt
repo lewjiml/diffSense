@@ -20,7 +20,7 @@ import com.intellij.openapi.progress.ProgressIndicator
  * @param indicator 进度指示器
  */
 class CoverageScanner(
-    config: DiffSenseConfig,
+    private val config: DiffSenseConfig,
     private val indicator: ProgressIndicator? = null,
 ) {
 
@@ -35,25 +35,38 @@ class CoverageScanner(
      * @param diff         代码改动（git diff 输出）
      * @param module       模块名
      * @param baseBranch   基线分支
+     * @param onProgress   实时进度回调（可选，用于日志推送）
      */
     fun scan(
         requirements: List<Requirement>,
         diff: String,
         module: String,
         baseBranch: String,
+        onProgress: ((String) -> Unit)? = null,
     ): ScanReport {
         log.info("[scan] start: ${requirements.size} 条需求, diff=${diff.length}B")
+        onProgress?.invoke("▶ 开始扫描：${requirements.size} 条需求，基线 $baseBranch，diff ${diff.length} 字符")
 
         indicator?.apply {
             text = "扫描代码覆盖度..."
             checkCanceled()
         }
 
+        onProgress?.invoke("• 组装提示词，包含需求列表与 git diff...")
         val userMsg = buildScanMessage(requirements, diff)
+        onProgress?.invoke("• 调用 LLM（${config.model}）...")
         val content = llm.chat(Prompts.scanSystemPrompt, userMsg, indicator)
+        onProgress?.invoke("• LLM 返回 ${content.length} 字符，解析中...")
 
         val results = parseCoverageJson(content, requirements)
         val summary = buildSummary(results)
+
+        // 逐条输出覆盖情况
+        results.forEach { r ->
+            val tag = if (r.covered) "✓" else "✗"
+            onProgress?.invoke("  $tag ${r.id} ${r.confidence}：${r.evidence.ifBlank { r.gap }}")
+        }
+        onProgress?.invoke("■ 扫描完成：覆盖 ${summary.covered}/${summary.total}，部分 ${summary.partial}，未覆盖 ${summary.uncovered}，覆盖率 ${"%.0f".format(summary.coverageRate * 100)}%")
 
         log.info("[scan] done: covered=${summary.covered}/${summary.total}, rate=${summary.coverageRate}")
 
@@ -72,8 +85,11 @@ class CoverageScanner(
             appendLine("## 需求列表（共 ${requirements.size} 条）")
             appendLine()
             requirements.forEach { r ->
-                appendLine("- **${r.id}** ${r.title} [${r.priority}]")
+                appendLine("- **${r.id}** ${r.title}")
                 appendLine("  ${r.description}")
+                if (r.keywords.isNotEmpty()) {
+                    appendLine("  关联词：${r.keywords.joinToString("、")}")
+                }
                 if (r.acceptance.isNotEmpty()) {
                     appendLine("  验收标准：")
                     r.acceptance.forEach { appendLine("    - $it") }
@@ -110,7 +126,6 @@ class CoverageScanner(
         val type = object : TypeToken<List<CoverageResult>>() {}.type
         val parsed: List<CoverageResult> = gson.fromJson(json, type) ?: emptyList()
 
-        // 用 requirements 的顺序为准，缺失的补 "未覆盖"
         val byId = parsed.associateBy { it.id }
         return requirements.map { req ->
             byId[req.id] ?: CoverageResult(

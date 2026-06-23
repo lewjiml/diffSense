@@ -105,8 +105,10 @@ class DiffSenseCheckinHandler(
 
             uncoveredCount = report.summary.uncovered + report.summary.partial
 
-            // 添加到历史报告
-            DiffSenseToolWindowService.getInstance(project).addReport(report)
+            // 推送结果到 Tool Window 的扫描 Tab 与日志
+            val service = DiffSenseToolWindowService.getInstance(project)
+            service.appendLog("[pre-commit] 扫描完成：覆盖 ${report.summary.covered}/${report.summary.total}，未覆盖 $uncoveredCount 条")
+            service.showReport(report, doc.requirements)
         } catch (e: Exception) {
             error = e.message
             log.warn("[pre-commit] 扫描出错: ${e.message}")

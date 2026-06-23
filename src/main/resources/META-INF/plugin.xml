@@ -3,10 +3,9 @@
   DiffSense · AI 需求覆盖度审查插件
   =====================================
   功能：
-    1. WizardDialog —— 三步向导弹窗（分割需求 / 扫描代码 / 一键Run）
-    2. ToolWindow  —— 常驻右侧工具窗（历史报告）
-    3. Pre-commit  —— CheckinHandler，提交前自动扫描
-    4. Editor 右键菜单 —— 审查选中代码覆盖了哪些需求
+    1. ToolWindow  —— 常驻右侧工具窗（需求拆解 / 扫描 / 日志 三 Tab）
+    2. Pre-commit  —— CheckinHandler，提交前自动扫描
+    3. Editor 右键菜单 —— 审查选中代码覆盖了哪些需求
 -->
 <idea-plugin>
     <id>com.diffsense.intellij</id>
@@ -28,6 +27,11 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <em>0.2.0</em><br/>
+        - 移除模态向导弹窗，改为右侧常驻 Tool Window（需求/扫描/日志 三 Tab）<br/>
+        - 需求列表与扫描结果均支持双击编辑<br/>
+        - 扫描过程实时输出到日志 Tab<br/>
+        - 需求拆解支持可配置并发度（默认 3）<br/>
         <em>0.1.0 初版</em><br/>
         - 三步向导弹窗（Parse / Scan / Run）<br/>
         - 结果表格展示覆盖度<br/>
@@ -76,16 +80,6 @@
 
     <!-- ==================== Action 注册 ==================== -->
     <actions>
-
-        <!-- 顶部菜单入口：Tools → DiffSense → 打开向导 -->
-        <action
-            id="DiffSense.OpenWizard"
-            class="com.diffsense.actions.OpenWizardAction"
-            text="打开 DiffSense 向导"
-            description="打开需求覆盖度审查向导">
-            <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift D"/>
-            <add-to-group group-id="ToolsMenu" anchor="last"/>
-        </action>
 
         <!-- Editor 右键菜单：审查选中代码 -->
         <action

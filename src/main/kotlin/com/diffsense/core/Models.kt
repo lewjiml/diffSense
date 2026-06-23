@@ -12,15 +12,19 @@ data class Requirement(
     /** 需求 ID，由 parser 填充（REQ-001） */
     var id: String = "",
     /** 需求标题（简短） */
-    val title: String,
+    var title: String = "",
     /** 详细描述 */
-    val description: String,
-    /** 优先级：P0 / P1 / P2 / P3 */
-    val priority: String = "P1",
-    /** 分类：功能 / 性能 / 安全 / 兼容性 / 用户体验 */
-    val category: String = "功能",
+    var description: String = "",
+    /**
+     * 关联词（业务关键词列表）
+     *
+     * 由 LLM 从需求文档中提取，用于：
+     * - 代码扫描时精准匹配实现位置
+     * - UI 展示需求与代码的对应关系
+     */
+    var keywords: List<String> = emptyList(),
     /** 验收标准列表 */
-    val acceptance: List<String> = emptyList(),
+    var acceptance: List<String> = emptyList(),
     /** 是否启用（用于 UI 勾选过滤） */
     var enabled: Boolean = true,
 )
@@ -31,11 +35,11 @@ data class Requirement(
  * 对应 requirements-Showcase.json 的整体结构。
  */
 data class RequirementDocument(
-    val module: String,
-    val source: String,
-    val section: String,
-    val total: Int,
-    val requirements: List<Requirement>,
+    var module: String,
+    var source: String,
+    var section: String,
+    var total: Int,
+    var requirements: List<Requirement>,
 )
 
 /**
@@ -44,15 +48,15 @@ data class RequirementDocument(
  * 对应 ai-req.js 中 SCAN_SYSTEM_PROMPT 的输出格式。
  */
 data class CoverageResult(
-    val id: String,
+    var id: String,
     /** 是否覆盖 */
-    val covered: Boolean,
+    var covered: Boolean,
     /** 置信度：high / medium / low */
-    val confidence: String,
+    var confidence: String,
     /** 代码中的证据（实现了该需求的代码位置） */
-    val evidence: String,
+    var evidence: String,
     /** 未覆盖的缺口说明 */
-    val gap: String,
+    var gap: String,
 ) {
     /** 用于 UI 展示的状态文本 */
     fun statusText(): String = when {
@@ -67,17 +71,17 @@ data class CoverageResult(
  * 扫描报告（一次 scan 的完整结果）
  */
 data class ScanReport(
-    val module: String,
-    val baseBranch: String,
-    val timestamp: Long,
-    val results: List<CoverageResult>,
-    val summary: Summary,
+    var module: String,
+    var baseBranch: String,
+    var timestamp: Long,
+    var results: List<CoverageResult>,
+    var summary: Summary,
 ) {
     data class Summary(
-        val total: Int,
-        val covered: Int,
-        val uncovered: Int,
-        val partial: Int,
-        val coverageRate: Double,
+        var total: Int,
+        var covered: Int,
+        var uncovered: Int,
+        var partial: Int,
+        var coverageRate: Double,
     )
 }

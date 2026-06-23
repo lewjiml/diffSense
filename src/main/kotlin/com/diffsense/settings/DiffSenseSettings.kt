@@ -36,6 +36,8 @@ class DiffSenseSettings : PersistentStateComponent<DiffSenseSettings.State> {
         var preCommitEnabled: Boolean = false,
         /** Pre-commit 阈值：未覆盖需求数超过此值则拦截 */
         var preCommitMaxUncovered: Int = 0,
+        /** 需求拆解并发度（同时调用 LLM 的请求数，默认 3） */
+        var parseConcurrency: Int = 3,
     )
 
     private var state = State()
@@ -57,6 +59,7 @@ class DiffSenseSettings : PersistentStateComponent<DiffSenseSettings.State> {
             apiKey = envKey.ifBlank { state.apiKey },
             severity = DiffSenseConfig.Severity.fromValue(state.severity),
             timeoutMs = state.timeoutSec * 1000,
+            parseConcurrency = state.parseConcurrency.coerceAtLeast(1),
         )
     }
 

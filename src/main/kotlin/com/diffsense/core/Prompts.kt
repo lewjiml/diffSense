@@ -9,38 +9,40 @@ package com.diffsense.core
 object Prompts {
 
     /**
-     * 拆解需求系统提示词（对应 ai-req.js 中的 PARSE_SYSTEM_PROMPT）
+     * 拆解需求系统提示词
      *
      * 输出 JSON 数组，每个元素：
      * {
      *   "title": "需求标题",
      *   "description": "详细描述",
-     *   "priority": "P0",
-     *   "category": "功能",
+     *   "keywords": ["关联词1", "关联词2"],
      *   "acceptance": ["验收标准1", "验收标准2"]
      * }
+     *
+     * 关联词说明：
+     *   - 从需求文档原文中提取的业务关键词、功能名、实体名
+     *   - 用于后续代码扫描时精准匹配实现位置
+     *   - 例如"用户登录"需求的关联词可能是 ["登录", "login", "password", "JWT"]
      */
     val parseSystemPrompt: String = """
 你是资深需求分析师。请把用户给你的需求文档片段，拆解成结构化的需求条目。
 
 要求：
 1. 每条需求应当是独立可验证、可测试的功能点或非功能要求
-2. 优先级 P0 为最高（阻塞性），P3 为最低（建议性）
-3. 分类包括：功能 / 性能 / 安全 / 兼容性 / 用户体验 / 可维护性
-4. 验收标准要具体、可测试
+2. keywords（关联词）必须从需求文档原文中提取，是真实出现的关键业务词、功能名、实体名、字段名、接口名等，用于后续在代码中定位实现位置
+3. 验收标准要具体、可测试
 
 输出严格的 JSON 数组（不要 markdown 代码块包裹），每个元素格式：
 {
   "title": "需求标题（简短）",
   "description": "详细描述",
-  "priority": "P0",
-  "category": "功能",
+  "keywords": ["关联词1", "关联词2"],
   "acceptance": ["验收标准1", "验收标准2"]
 }
     """.trim()
 
     /**
-     * 覆盖度分析系统提示词（对应 ai-req.js 中的 SCAN_SYSTEM_PROMPT）
+     * 覆盖度分析系统提示词
      *
      * 输出 JSON 数组，每个元素：
      * {
@@ -66,6 +68,7 @@ object Prompts {
 4. "gap": 如果 covered=false 或 confidence != high，说明缺失了什么
 
 注意：
+- 优先根据每条需求的 keywords（关联词）在代码 diff 中查找匹配
 - 只关心本次代码改动（diff），不看历史已实现的代码
 - 一条需求可能需要多处改动才能完全覆盖
 - 宁可保守，不要过度乐观

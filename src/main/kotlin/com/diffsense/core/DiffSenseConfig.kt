@@ -30,6 +30,14 @@ data class DiffSenseConfig(
 
     /** 单次请求最大 token */
     val maxTokens: Int = 4096,
+
+    /**
+     * 需求拆解阶段的并发度（同时调用 LLM 的请求数）
+     *
+     * 用户可在 Settings → Tools → DiffSense 中调整。
+     * 默认 3，避免对 API 服务器造成过大压力。
+     */
+    val parseConcurrency: Int = 3,
 ) {
     enum class Severity(val label: String, val value: String) {
         STRICT("严格（致命+严重）", "strict"),
