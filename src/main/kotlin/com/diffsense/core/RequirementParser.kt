@@ -15,12 +15,10 @@ import kotlinx.coroutines.sync.withPermit
 /**
  * 需求拆解器（parse 阶段）
  *
- * 对应 ai-req.js 中的 parseRequirements() 函数。
- *
  * 工作流：
  *   需求文档 MD
- *     → [MarkdownSplitter] 按 ## 切片
- *     → 按用户选择的板块/子板块过滤
+ *     → [MarkdownSplitter] 按 ## 切片（自动剔除删除线噪声）
+ *     → 按用户选择的板块关键词过滤（包含匹配）
  *     → 对每个片段调用 LLM 拆解（并发，受 [DiffSenseConfig.parseConcurrency] 限制）
  *     → 合并成 RequirementDocument
  *
@@ -39,38 +37,45 @@ class RequirementParser(
     /**
      * 解析需求文档
      *
-     * @param md            markdown 原文
-     * @param module        模块名（用于输出元信息）
-     * @param sectionFilter 要处理的板块标题（null/empty = 全部）
-     * @param subSectionFilter 要处理的子板块标题（null/empty = 全部）
-     * @param onProgress    进度回调（可选，用于实时日志推送）
+     * @param md              markdown 原文
+     * @param module          模块名（用于输出元信息；若留空会从板块过滤推导）
+     * @param sectionKeywords 板块过滤关键词（null/empty = 全部；包含匹配）
+     * @param onProgress      进度回调（可选，用于实时日志推送）
      * @return 结构化需求文档
      */
     fun parse(
         md: String,
         module: String,
-        sectionFilter: List<String>? = null,
-        subSectionFilter: List<String>? = null,
+        sectionKeywords: List<String>? = null,
         onProgress: ((String) -> Unit)? = null,
     ): RequirementDocument = runBlocking {
-        log.info("[parse] start: module=$module, concurrency=${config.parseConcurrency}")
+        log.info("[parse] start: module=$module, keywords=$sectionKeywords, concurrency=${config.parseConcurrency}")
 
-        val sections = MarkdownSplitter.splitByHeading(md)
-            .filter { sectionFilter.isNullOrEmpty() || it.first in sectionFilter }
+        // 按关键词过滤板块
+        val sections = MarkdownSplitter.splitByHeading(md).filter { (title, _) ->
+            if (sectionKeywords.isNullOrEmpty()) true
+            else sectionKeywords.any { kw -> title.contains(kw.trim(), ignoreCase = true) }
+        }
+
+        // module 自动推导：留空时取第一个命中的板块标题
+        val effectiveModule = module.ifBlank {
+            sectionKeywords?.firstOrNull()?.trim()?.ifBlank { null }
+                ?: sections.firstOrNull()?.first
+                ?: "default"
+        }
 
         // 展平成 (secTitle, subTitle, body) 任务列表
         data class Slice(val section: String, val subSection: String, val body: String)
         val slices = mutableListOf<Slice>()
         for ((secTitle, secBody) in sections) {
             val subSections = MarkdownSplitter.splitBySubHeading(secBody)
-                .filter { subSectionFilter.isNullOrEmpty() || it.first in subSectionFilter }
             for ((subTitle, subBody) in subSections) {
                 slices += Slice(secTitle, subTitle, subBody)
             }
         }
 
         val total = slices.size
-        onProgress?.invoke("共 $total 个片段待拆解，并发度=${config.parseConcurrency}")
+        onProgress?.invoke("共 $total 个片段待拆解，并发度=${config.parseConcurrency}（已自动剔除删除线内容）")
         indicator?.text = "拆解需求（0/$total）"
 
         // 信号量限制并发度
@@ -86,7 +91,7 @@ class RequirementParser(
                         val userMsg = buildUserMessage(slice.section, slice.subSection, slice.body)
                         onProgress?.invoke("→ [${index + 1}/$total] 拆解：${slice.section} / ${slice.subSection}")
                         val content = llm.chat(Prompts.parseSystemPrompt, userMsg, indicator)
-                        val reqs = parseRequirementsJson(content)
+                        val reqs = parseRequirementsJson(content, onProgress, "${slice.section}/${slice.subSection}")
                         val done = counter.incrementAndGet()
                         indicator?.text = "拆解需求（$done/$total）"
                         indicator?.fraction = done.toDouble() / total
@@ -108,9 +113,9 @@ class RequirementParser(
         onProgress?.invoke("拆解完成，共 ${allRequirements.size} 条需求")
 
         RequirementDocument(
-            module = module,
+            module = effectiveModule,
             source = "${md.length} bytes",
-            section = sectionFilter?.joinToString(",") ?: "all",
+            section = sectionKeywords?.joinToString(",") ?: "all",
             total = allRequirements.size,
             requirements = allRequirements,
         )
@@ -131,37 +136,85 @@ class RequirementParser(
     }
 
     /**
-     * 解析 LLM 返回的 JSON 数组
+     * 解析 LLM 返回的 JSON 数组（带容错）
      *
-     * 兼容三种格式：
-     *   - 纯 JSON 数组
-     *   - markdown 代码块包裹（```json ... ```)
-     *   - 带前后多余文本
+     * 容错策略：
+     *   1. 剥离 markdown 代码块包裹（```json ... ```）
+     *   2. 截取第一个 [ 到最后一个 ] 的范围
+     *   3. 尝试修复尾部截断（缺少 ] 时自动补全）
+     *   4. 解析失败记录原始响应前 500 字符到日志，便于排查
      */
-    private fun parseRequirementsJson(content: String): List<Requirement> {
-        val json = extractJsonArray(content) ?: return emptyList()
-        val type = object : TypeToken<List<Requirement>>() {}.type
-        return gson.fromJson(json, type) ?: emptyList()
+    private fun parseRequirementsJson(
+        content: String,
+        onProgress: ((String) -> Unit)? = null,
+        context: String = "",
+    ): List<Requirement> {
+        val json = extractJsonArray(content, onProgress, context) ?: return emptyList()
+        return try {
+            val type = object : TypeToken<List<Requirement>>() {}.type
+            gson.fromJson(json, type) ?: emptyList()
+        } catch (e: Exception) {
+            log.warn("JSON 解析失败 [$context]：${e.message}，原始（前500字）：${content.take(500)}")
+            onProgress?.invoke("⚠ [$context] JSON 解析失败：${e.message}，已记录到日志")
+            emptyList()
+        }
     }
 
-    /** 从 LLM 输出中提取 JSON 数组部分 */
-    private fun extractJsonArray(content: String): String? {
+    /** 从 LLM 输出中提取 JSON 数组部分，并尝试修复截断 */
+    private fun extractJsonArray(
+        content: String,
+        onProgress: ((String) -> Unit)? = null,
+        context: String = "",
+    ): String? {
         val trimmed = content.trim()
-        if (trimmed.startsWith("[")) return trimmed
 
+        // 1. 纯 JSON 数组
+        if (trimmed.startsWith("[") && trimmed.endsWith("]")) return trimmed
+
+        // 2. markdown 代码块包裹
         val codeBlock = Regex("""```(?:json)?\s*(.+?)\s*```""", RegexOption.DOT_MATCHES_ALL)
             .find(trimmed)
         if (codeBlock != null) {
             val inner = codeBlock.groupValues[1].trim()
-            if (inner.startsWith("[")) return inner
+            if (inner.startsWith("[")) {
+                return if (inner.endsWith("]")) inner else repairTruncatedJson(inner, onProgress, context)
+            }
         }
 
+        // 3. 带前后多余文本：取第一个 [ 到最后一个 ]
         val first = trimmed.indexOf('[')
         val last = trimmed.lastIndexOf(']')
         if (first in 0 until last) {
             return trimmed.substring(first, last + 1)
         }
+
+        // 4. 只有 [ 没有 ]（尾部被截断）：尝试修复
+        if (first >= 0) {
+            val partial = trimmed.substring(first)
+            return repairTruncatedJson(partial, onProgress, context)
+        }
+
+        log.warn("无法提取 JSON [$context]，原始（前500字）：${trimmed.take(500)}")
+        onProgress?.invoke("⚠ [$context] 未找到 JSON 数组，已记录到日志")
         return null
+    }
+
+    /**
+     * 修复截断的 JSON 数组
+     *
+     * 策略：找到最后一个完整对象的 `}`，在其后补 `]`。
+     */
+    private fun repairTruncatedJson(
+        partial: String,
+        onProgress: ((String) -> Unit)? = null,
+        context: String = "",
+    ): String {
+        val lastCompleteBrace = partial.lastIndexOf('}')
+        if (lastCompleteBrace < 0) return partial
+        val repaired = partial.substring(0, lastCompleteBrace + 1) + "]"
+        onProgress?.invoke("ℹ [$context] JSON 尾部截断，已尝试修复")
+        log.info("[$context] JSON 修复：原始长度=${partial.length}，修复后=${repaired.length}")
+        return repaired
     }
 
     /** 将 RequirementDocument 序列化为 JSON 字符串 */

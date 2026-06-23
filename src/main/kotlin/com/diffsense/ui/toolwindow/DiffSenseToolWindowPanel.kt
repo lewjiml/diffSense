@@ -19,6 +19,7 @@ import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTabbedPane
+import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
@@ -30,19 +31,22 @@ import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.JTabbedPane
+import javax.swing.event.DocumentEvent
+import javax.swing.event.DocumentListener
 
 /**
  * DiffSense Tool Window 内容面板（三 Tab）
  *
  * 三个 Tab：
- *   1. 需求 Tab —— 选 MD 文档 → 拆解需求 → 可编辑需求表格
- *   2. 扫描 Tab —— 选需求 JSON + 基线分支 → 扫描代码 → 可编辑结果表格
+ *   1. 需求 Tab —— 选 MD 文档 → 板块过滤 → 拆解需求 → 可编辑需求表格（3 列 + 详情）
+ *   2. 扫描 Tab —— 选需求 JSON + 基线分支 → 扫描代码 → 可编辑结果表格（3 列 + 详情）
  *   3. 日志 Tab —— 实时输出每步进度（parse/scan 过程可见）
  *
- * 对应用户反馈：
- *   - 第 1 条：改为边栏窗口，不影响 IDEA 使用
- *   - 第 4 条：扫描结果可编辑
- *   - 第 5 条：扫描过程可见
+ * v0.3.0 改进：
+ *   - 改进 1：「模块名」字段改为「板块过滤」多行文本框（每行一个关键词）
+ *   - 改进 4：选完 md 后实时显示「将拆解 N 个片段」预览
+ *   - 改进 11：Token 累计统计（不再每次 reset），状态栏加重置按钮
+ *   - 改进 12：基线分支自动检测（git symbolic-ref refs/remotes/origin/HEAD）
  */
 class DiffSenseToolWindowPanel(
     private val project: Project,
@@ -51,11 +55,9 @@ class DiffSenseToolWindowPanel(
     private val log = logger<DiffSenseToolWindowPanel>()
 
     // ==================== 共享状态 ====================
-    /** 最近一次拆解得到的需求文档（供扫描 Tab 使用） */
     @Volatile
     internal var lastDocument: RequirementDocument? = null
 
-    /** 最近一次扫描报告 */
     @Volatile
     internal var lastReport: ScanReport? = null
 
@@ -65,8 +67,24 @@ class DiffSenseToolWindowPanel(
             "选择需求文档", "Markdown 格式的需求文档", project,
             FileChooserDescriptorFactory.createSingleFileDescriptor("md")
         )
+        textField.document.addDocumentListener(object : DocumentListener {
+            override fun insertUpdate(e: DocumentEvent?) = updateSlicePreview()
+            override fun removeUpdate(e: DocumentEvent?) = updateSlicePreview()
+            override fun changedUpdate(e: DocumentEvent?) = updateSlicePreview()
+        })
     }
-    private val moduleField = JBTextField("default")
+
+    /** 改进 1：板块过滤多行文本框（每行一个标题关键词，留空=全部） */
+    private val sectionFilterArea = JBTextArea(3, 40).apply {
+        emptyText.text = "板块过滤（每行一个标题关键词，留空=全部）。例：用户管理\n订单"
+    }
+
+    /** 改进 4：片段数预览标签 */
+    private val slicePreviewLabel = JBLabel(" ").apply {
+        foreground = JBColor.gray
+        border = BorderFactory.createEmptyBorder(0, 0, 0, 0)
+    }
+
     private val requirementTable: RequirementTable = RequirementTable(onEdited = ::onRequirementEdited)
 
     // ==================== 扫描 Tab 组件 ====================
@@ -76,9 +94,11 @@ class DiffSenseToolWindowPanel(
             FileChooserDescriptorFactory.createSingleFileDescriptor("json")
         )
     }
+
+    /** 改进 12：基线分支自动检测（启动时填充） */
     private val baseBranchField = JBTextField("develop")
+
     private val resultTable = CoverageResultTable(onEdited = {
-        // 编辑后同步回 lastReport
         lastReport?.let { report ->
             report.summary = rebuildSummary(report.results)
         }
@@ -92,6 +112,9 @@ class DiffSenseToolWindowPanel(
     private val tokenLabel = JBLabel("💰 Token：parse 0 / scan 0")
 
     init {
+        // 改进 12：启动时尝试自动检测基线分支
+        detectBaseBranch()
+
         val tabs = JBTabbedPane().apply {
             tabPlacement = JTabbedPane.TOP
         }
@@ -107,7 +130,14 @@ class DiffSenseToolWindowPanel(
     private fun buildRequirementTab(): JComponent {
         val form = FormBuilder.createFormBuilder()
             .addLabeledComponent("需求文档（.md）", reqDocField)
-            .addLabeledComponent("模块名", moduleField)
+            .addLabeledComponent(
+                "板块过滤",
+                JBScrollPane(sectionFilterArea).apply {
+                    preferredSize = java.awt.Dimension(400, 60)
+                    border = BorderFactory.createLineBorder(JBColor.border())
+                }
+            )
+            .addComponent(slicePreviewLabel)
             .addVerticalGap(4)
             .addComponent(JPanel(FlowLayout(FlowLayout.LEFT)).apply {
                 add(JButton("▶ 拆解需求", DiffSenseIcons.PARSE).apply {
@@ -117,13 +147,11 @@ class DiffSenseToolWindowPanel(
                     addActionListener { saveRequirementsJson() }
                 })
             })
-            .addComponent(JBLabel("需求列表（双击单元格可编辑，关联词用顿号分隔）：").apply {
+            .addComponent(JBLabel("需求列表（双击单元格可编辑，选中行在下方详情编辑）：").apply {
                 border = BorderFactory.createEmptyBorder(4, 0, 2, 0)
                 foreground = JBColor.gray
             })
-            .addComponent(JBScrollPane(requirementTable.getComponent()).apply {
-                preferredSize = java.awt.Dimension(900, 400)
-            })
+            .addComponentFillVertically(requirementTable.getComponent(), 0)
             .panel
 
         return JPanel(BorderLayout()).apply {
@@ -160,9 +188,7 @@ class DiffSenseToolWindowPanel(
                 border = BorderFactory.createEmptyBorder(4, 0, 2, 0)
                 foreground = JBColor.gray
             })
-            .addComponent(JBScrollPane(resultTable.getComponent()).apply {
-                preferredSize = java.awt.Dimension(900, 400)
-            })
+            .addComponentFillVertically(resultTable.getComponent(), 0)
             .panel
 
         return JPanel(BorderLayout()).apply {
@@ -176,6 +202,15 @@ class DiffSenseToolWindowPanel(
         return JPanel(FlowLayout(FlowLayout.LEFT)).apply {
             border = BorderFactory.createEmptyBorder(2, 8, 2, 8)
             add(tokenLabel)
+            add(JButton("重置 Token 统计").apply {
+                toolTipText = "清零 parse / scan 累计的 Token 统计"
+                margin = java.awt.Insets(0, 4, 0, 4)
+                addActionListener {
+                    TokenStats.reset()
+                    refreshToken()
+                    logPanel.appendLine("ℹ Token 统计已重置")
+                }
+            })
         }
     }
 
@@ -186,6 +221,32 @@ class DiffSenseToolWindowPanel(
             doc.total = doc.requirements.size
         }
     }
+
+    /** 改进 4：选完 md 后实时预览将拆解的片段数 */
+    private fun updateSlicePreview() {
+        val path = reqDocField.text.trim()
+        if (path.isBlank() || !File(path).exists()) {
+            slicePreviewLabel.text = " "
+            return
+        }
+        try {
+            val md = File(path).readText(Charsets.UTF_8)
+            val keywords = parseSectionKeywords()
+            val count = MarkdownSplitter.countSlices(md, keywords)
+            val sections = MarkdownSplitter.listSections(md)
+            val filteredInfo = if (keywords.isEmpty()) "全部 ${sections.size} 个板块"
+            else "${MarkdownSplitter.filterSections(md, keywords).size}/${sections.size} 个板块命中"
+            slicePreviewLabel.text = "📋 将拆解约 $count 个片段（$filteredInfo）"
+        } catch (e: Exception) {
+            slicePreviewLabel.text = " "
+        }
+    }
+
+    /** 解析板块过滤多行文本为关键词列表 */
+    private fun parseSectionKeywords(): List<String> =
+        sectionFilterArea.text.lines()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
 
     // ==================== 需求 Tab 动作 ====================
     private fun startParse() {
@@ -212,21 +273,22 @@ class DiffSenseToolWindowPanel(
             return
         }
 
-        TokenStats.reset()
+        // 改进 11：不再每次 reset，改为累计统计
         requirementTable.clear()
         logPanel.clear()
 
-        val module = moduleField.text.trim().ifBlank { "default" }
+        val sectionKeywords = parseSectionKeywords()
         val md = mdFile.readText(Charsets.UTF_8)
 
         ProgressManager.getInstance().run(object : Task.Backgroundable(project, "DiffSense 拆解需求", true) {
             override fun run(indicator: ProgressIndicator) {
                 try {
-                    logPanel.appendLine("开始拆解需求：$mdFile.name，模块=$module")
+                    logPanel.appendLine("开始拆解需求：${mdFile.name}，板块过滤=${sectionKeywords.ifEmpty { listOf("全部") }}")
                     val parser = RequirementParser(config, indicator)
                     val doc = parser.parse(
                         md = md,
-                        module = module,
+                        module = "",  // 改进 1：留空让 parser 自动从板块关键词推导
+                        sectionKeywords = sectionKeywords,
                         onProgress = { line -> logPanel.appendLine(line) },
                     )
                     lastDocument = doc
@@ -259,7 +321,6 @@ class DiffSenseToolWindowPanel(
             Messages.showInfoMessage(project, "请先拆解需求", "无数据")
             return
         }
-        // 同步最新编辑结果
         doc.requirements = requirementTable.getRequirements()
         doc.total = doc.requirements.size
 
@@ -272,7 +333,6 @@ class DiffSenseToolWindowPanel(
     }
 
     // ==================== 扫描 Tab 动作 ====================
-    /** 使用需求 Tab 拆解的结果，自动填到扫描输入 */
     private fun useLastDocument() {
         val doc = lastDocument
         if (doc == null) {
@@ -296,7 +356,6 @@ class DiffSenseToolWindowPanel(
             return
         }
 
-        // 获取需求源：优先使用 lastDocument（用户点过"使用上次拆解"或直接扫描）
         val doc = resolveRequirements() ?: run {
             Messages.showWarningDialog(project, "请先拆解需求或选择 requirements.json", "缺少需求")
             return
@@ -305,7 +364,7 @@ class DiffSenseToolWindowPanel(
         val baseBranch = baseBranchField.text.trim().ifBlank { "develop" }
 
         resultTable.clear()
-        TokenStats.reset()
+        // 改进 11：不再 reset，累计统计
 
         ProgressManager.getInstance().run(object : Task.Backgroundable(project, "DiffSense 扫描覆盖度", true) {
             override fun run(indicator: ProgressIndicator) {
@@ -383,6 +442,28 @@ class DiffSenseToolWindowPanel(
     private fun refreshToken() {
         tokenLabel.text = "💰 Token：parse ${TokenStats.snapshot(TokenStats.Stage.PARSE).totalTokens} / " +
             "scan ${TokenStats.snapshot(TokenStats.Stage.SCAN).totalTokens}"
+    }
+
+    /** 改进 12：自动检测基线分支（git symbolic-ref） */
+    private fun detectBaseBranch() {
+        try {
+            val basePath = project.basePath ?: return
+            val processBuilder = ProcessBuilder("git", "symbolic-ref", "refs/remotes/origin/HEAD")
+            processBuilder.directory(File(basePath))
+            processBuilder.redirectErrorStream(true)
+            val process = processBuilder.start()
+            val output = process.inputStream.bufferedReader().readText().trim()
+            process.waitFor()
+            if (output.startsWith("refs/remotes/origin/")) {
+                val branch = output.removePrefix("refs/remotes/origin/")
+                if (branch.isNotBlank()) {
+                    baseBranchField.text = branch
+                    log.info("自动检测到基线分支：$branch")
+                }
+            }
+        } catch (e: Exception) {
+            log.debug("基线分支自动检测失败（忽略，使用默认 develop）：${e.message}")
+        }
     }
 
     /** 根据覆盖度结果重新汇总（编辑后调用） */
