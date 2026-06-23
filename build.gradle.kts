@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.diffsense"
-version = "0.4.0"
+version = property("pluginVersion") as String
 
 repositories {
     mavenCentral()
