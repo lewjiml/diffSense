@@ -87,6 +87,12 @@ class DiffSenseToolWindowPanel(
 
     private val requirementTable: RequirementTable = RequirementTable(onEdited = ::onRequirementEdited)
 
+    /** 改动 6（v4）：JSON 路径常驻标签 */
+    private val jsonPathLabel = JBLabel("JSON：（未保存）").apply {
+        foreground = JBColor.gray
+        border = BorderFactory.createEmptyBorder(0, 0, 0, 0)
+    }
+
     // ==================== 扫描 Tab 组件 ====================
     private val reqJsonField = TextFieldWithBrowseButton().apply {
         addBrowseFolderListener(
@@ -101,11 +107,7 @@ class DiffSenseToolWindowPanel(
         text = DEFAULT_EXCLUDE_PATHS.joinToString("\n")
     }
 
-    private val resultTable = CoverageResultTable(onEdited = {
-        lastReport?.let { report ->
-            report.summary = rebuildSummary(report.results)
-        }
-    })
+    private val resultTable = CoverageResultTable()
     private val summaryLabel = JBLabel("暂无扫描结果")
 
     // ==================== 日志 Tab 组件 ====================
@@ -151,6 +153,7 @@ class DiffSenseToolWindowPanel(
                     addActionListener { reloadFromJson() }
                 })
             })
+            .addComponent(jsonPathLabel)
             .addComponent(JBLabel("需求列表（只读；编辑请改 JSON 后点「从 JSON 更新列表」）：").apply {
                 border = BorderFactory.createEmptyBorder(4, 0, 2, 0)
                 foreground = JBColor.gray
@@ -313,6 +316,7 @@ class DiffSenseToolWindowPanel(
 
                     ApplicationManager.getApplication().invokeLater {
                         reqJsonField.text = target.absolutePath
+                        jsonPathLabel.text = "JSON：${target.name}"
                         requirementTable.showRequirements(doc.requirements)
                         refreshToken()
                         Messages.showInfoMessage(
@@ -350,6 +354,7 @@ class DiffSenseToolWindowPanel(
             val doc = parser.fromJson(json)
             lastDocument = doc
             requirementTable.showRequirements(doc.requirements)
+            jsonPathLabel.text = "JSON：${jsonFile.name}"
             refreshToken()
             logPanel.appendLine("↻ 已从 JSON 重新加载：${jsonFile.name}（${doc.total} 条需求）")
             Messages.showInfoMessage(project, "已加载 ${doc.total} 条需求", "刷新成功")
@@ -475,16 +480,6 @@ class DiffSenseToolWindowPanel(
     private fun refreshToken() {
         tokenLabel.text = "💰 Token：parse ${TokenStats.snapshot(TokenStats.Stage.PARSE).totalTokens} / " +
             "scan ${TokenStats.snapshot(TokenStats.Stage.SCAN).totalTokens}"
-    }
-
-    /** 根据覆盖度结果重新汇总（编辑后调用） */
-    private fun rebuildSummary(results: List<CoverageResult>): ScanReport.Summary {
-        val total = results.size
-        val covered = results.count { it.covered && it.confidence == "high" }
-        val partial = results.count { it.covered && it.confidence != "high" }
-        val uncovered = total - covered - partial
-        val rate = if (total == 0) 0.0 else covered.toDouble() / total
-        return ScanReport.Summary(total, covered, uncovered, partial, rate)
     }
 
     /** 把报告渲染为 Markdown */

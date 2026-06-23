@@ -11,14 +11,15 @@ import javax.swing.ScrollPaneConstants
 import javax.swing.table.DefaultTableModel
 
 /**
- * 需求列表（只读 4 列）
+ * 需求列表（4 列，启用列可勾选）
  *
- * 问题 3a：精简为只读表格，去掉搜索框、可编辑、关联词列、详情面板。
- *   - 4 列：启用 / ID / 标题 / 描述（全部只读）
- *   - 编辑需求请直接改 JSON 文件后点「从 JSON 更新列表」
+ * 问题 3a：精简为只读表格，去掉搜索框、关联词列、详情面板。
+ * 改动 4（v4）：放开「启用」列可勾选，其余列只读。
+ *   - 4 列：启用 / ID / 标题 / 描述
+ *   - 编辑需求内容请直接改 JSON 文件后点「从 JSON 更新列表」
  */
 class RequirementTable(
-    @Suppress("UNUSED_PARAMETER") onEdited: () -> Unit = {},
+    private val onEdited: () -> Unit = {},
 ) {
 
     /** 列名：启用 / ID / 标题 / 描述 */
@@ -28,7 +29,8 @@ class RequirementTable(
     private var allReqs: List<Requirement> = emptyList()
 
     private val model = object : DefaultTableModel(columnNames, 0) {
-        override fun isCellEditable(row: Int, column: Int): Boolean = false
+        // 改动 4（v4）：放开「启用」列可编辑，其余列只读
+        override fun isCellEditable(row: Int, column: Int): Boolean = column == 0
 
         override fun getColumnClass(columnIndex: Int): Class<*> {
             return if (columnIndex == 0) java.lang.Boolean::class.java
@@ -46,6 +48,14 @@ class RequirementTable(
         columnModel.getColumn(2).preferredWidth = 260
         columnModel.getColumn(3).preferredWidth = 460
         selectionModel.selectionMode = ListSelectionModel.SINGLE_SELECTION
+
+        // 改动 4（v4）：启用列勾选同步回数据模型
+        model.addTableModelListener { e ->
+            if (e.column == 0 && e.firstRow in allReqs.indices) {
+                allReqs[e.firstRow].enabled = model.getValueAt(e.firstRow, 0) as Boolean
+                onEdited()
+            }
+        }
     }
 
     /** 获取整个组件（仅表格） */

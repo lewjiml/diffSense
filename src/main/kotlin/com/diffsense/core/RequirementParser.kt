@@ -75,7 +75,10 @@ class RequirementParser(
                 slices += Slice(secTitle, secTitle, secBody)
             } else {
                 val subParts = MarkdownSplitter.splitBySubHeading(secBody)
-                val matched = subParts.filter { it.first == subTitle }
+                // 改动 2（v4）：既匹配 ### 标题本身，也匹配其下表格行切片（格式 "###标题 / 行内容"）
+                val matched = subParts.filter {
+                    it.first == subTitle || it.first.startsWith("$subTitle / ")
+                }
                 if (matched.isEmpty()) {
                     slices += Slice(secTitle, subTitle, secBody)
                 } else {
@@ -104,6 +107,9 @@ class RequirementParser(
                         onProgress?.invoke("→ [${index + 1}/$total] 拆解：${slice.section} / ${slice.subSection}")
                         val content = llm.chat(Prompts.parseSystemPrompt, userMsg, indicator)
                         val reqs = parseRequirementsJson(content, onProgress, "${slice.section}/${slice.subSection}")
+                        // 改动 7b（v4）：回填 source，记录需求来自文档的哪个板块/子板块
+                        val sourcePath = if (slice.subSection.isNotBlank()) "${slice.section} / ${slice.subSection}" else slice.section
+                        reqs.forEach { it.source = sourcePath }
                         val done = counter.incrementAndGet()
                         indicator?.text = "拆解需求（$done/$total）"
                         indicator?.fraction = done.toDouble() / total

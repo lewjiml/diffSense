@@ -55,7 +55,8 @@ class LLMClient(
                 mapOf("role" to "system", "content" to systemPrompt),
                 mapOf("role" to "user", "content" to userMessage),
             )))
-            addProperty("temperature", 0.1)
+            // 改动 7a（v4）：temperature 降为 0，保证拆解结果稳定性
+            addProperty("temperature", 0.0)
             addProperty("max_tokens", config.maxTokens)
         }
 

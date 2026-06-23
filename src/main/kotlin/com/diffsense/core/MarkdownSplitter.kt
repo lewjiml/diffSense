@@ -71,9 +71,12 @@ object MarkdownSplitter {
             val end = if (i + 1 < matches.size) matches[i + 1].range.first else sectionBody.length
             val body = sectionBody.substring(start, end).trim()
             // 问题 2：### 内部如果有大表格，按表格行进一步切分
+            // 改动 1（v4）：表格行切分后的 title 带上 ### 标题前缀，避免下游过滤匹配不上
             val tableSlices = splitByTableRows(body)
             if (tableSlices.size > 1) {
-                result.addAll(tableSlices)
+                for ((rowTitle, rowBody) in tableSlices) {
+                    result.add("$title / $rowTitle" to rowBody)
+                }
             } else {
                 result.add(title to body)
             }

@@ -79,28 +79,28 @@ class CoverageScanner(
         )
     }
 
-    /** 构建覆盖度分析的用户消息 */
+    /** 构建覆盖度分析的用户消息（改动 3b：代码改动在前，需求在后，强化「从代码出发」） */
     private fun buildScanMessage(requirements: List<Requirement>, diff: String): String {
         return buildString {
-            appendLine("## 需求列表（共 ${requirements.size} 条）")
+            appendLine("## 代码改动（git diff，请逐块分析）")
+            appendLine("注意：以 `diff --git a/... b/...` 开头的行标注了文件路径，是判断业务归属的重要线索")
+            appendLine()
+            appendLine("```diff")
+            appendLine(diff)
+            appendLine("```")
+            appendLine()
+            appendLine("## 需求列表（共 ${requirements.size} 条，供匹配参考）")
             appendLine()
             requirements.forEach { r ->
                 appendLine("- **${r.id}** ${r.title}")
-                appendLine("  ${r.description}")
-                if (r.keywords.isNotEmpty()) {
-                    appendLine("  关联词：${r.keywords.joinToString("、")}")
+                if (r.description.isNotBlank()) {
+                    appendLine("  ${r.description}")
                 }
                 if (r.acceptance.isNotEmpty()) {
                     appendLine("  验收标准：")
                     r.acceptance.forEach { appendLine("    - $it") }
                 }
             }
-            appendLine()
-            appendLine("## 代码改动（git diff）")
-            appendLine()
-            appendLine("```diff")
-            appendLine(diff)
-            appendLine("```")
         }
     }
 

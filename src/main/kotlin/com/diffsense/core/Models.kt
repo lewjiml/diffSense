@@ -25,6 +25,12 @@ data class Requirement(
     var keywords: List<String> = emptyList(),
     /** 验收标准列表 */
     var acceptance: List<String> = emptyList(),
+    /**
+     * 来源（改动 7c/v4）：该需求来自文档的哪个板块/子板块
+     *
+     * 由 parser 填充，用于追溯需求出处，便于人工核对。
+     */
+    var source: String = "",
     /** 是否启用（用于 UI 勾选过滤） */
     var enabled: Boolean = true,
 )
