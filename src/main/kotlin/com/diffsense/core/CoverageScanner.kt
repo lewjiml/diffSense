@@ -31,21 +31,21 @@ class CoverageScanner(
     /**
      * 扫描需求覆盖度
      *
+     * 问题 5a 改进：移除 baseBranch 参数，diff 由调用方（DiffCollector）预先收集。
+     *
      * @param requirements 需求列表（来自 parse 阶段或读取的 JSON）
-     * @param diff         代码改动（git diff 输出）
+     * @param diff         代码改动（git diff 输出，已聚合所有仓库）
      * @param module       模块名
-     * @param baseBranch   基线分支
      * @param onProgress   实时进度回调（可选，用于日志推送）
      */
     fun scan(
         requirements: List<Requirement>,
         diff: String,
         module: String,
-        baseBranch: String,
         onProgress: ((String) -> Unit)? = null,
     ): ScanReport {
         log.info("[scan] start: ${requirements.size} 条需求, diff=${diff.length}B")
-        onProgress?.invoke("▶ 开始扫描：${requirements.size} 条需求，基线 $baseBranch，diff ${diff.length} 字符")
+        onProgress?.invoke("▶ 开始扫描：${requirements.size} 条需求，diff ${diff.length} 字符")
 
         indicator?.apply {
             text = "扫描代码覆盖度..."
@@ -72,7 +72,7 @@ class CoverageScanner(
 
         return ScanReport(
             module = module,
-            baseBranch = baseBranch,
+            baseBranch = "HEAD",
             timestamp = System.currentTimeMillis(),
             results = results,
             summary = summary,

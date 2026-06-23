@@ -89,7 +89,6 @@ class ScanSelectionAction : AnAction() {
                         requirements = doc.requirements.filter { it.enabled },
                         diff = selected,
                         module = doc.module,
-                        baseBranch = "editor-selection",
                         onProgress = { line -> panel.appendLog(line) },
                     )
                     panel.showScanReport(report, doc.requirements)

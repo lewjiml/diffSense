@@ -37,9 +37,13 @@ class RequirementParser(
     /**
      * 解析需求文档
      *
+     * 问题 1 改进：过滤下钻到 ### 级别（两层匹配）。
+     *   - 关键词命中 ## → 拆该 ## 下所有 ###
+     *   - 关键词命中 ### → 只拆那个 ###
+     *
      * @param md              markdown 原文
-     * @param module          模块名（用于输出元信息；若留空会从板块过滤推导）
-     * @param sectionKeywords 板块过滤关键词（null/empty = 全部；包含匹配）
+     * @param module          模块名（用于输出元信息；若留空会从板块关键词推导）
+     * @param sectionKeywords 板块过滤关键词（null/empty = 全部；两层匹配下钻到 ###）
      * @param onProgress      进度回调（可选，用于实时日志推送）
      * @return 结构化需求文档
      */
@@ -51,26 +55,34 @@ class RequirementParser(
     ): RequirementDocument = runBlocking {
         log.info("[parse] start: module=$module, keywords=$sectionKeywords, concurrency=${config.parseConcurrency}")
 
-        // 按关键词过滤板块
-        val sections = MarkdownSplitter.splitByHeading(md).filter { (title, _) ->
-            if (sectionKeywords.isNullOrEmpty()) true
-            else sectionKeywords.any { kw -> title.contains(kw.trim(), ignoreCase = true) }
-        }
+        // 问题 1：使用 filterToSubSections 下钻到 ### 级别
+        val subSecPairs = MarkdownSplitter.filterToSubSections(md, sectionKeywords ?: emptyList())
 
         // module 自动推导：留空时取第一个命中的板块标题
         val effectiveModule = module.ifBlank {
             sectionKeywords?.firstOrNull()?.trim()?.ifBlank { null }
-                ?: sections.firstOrNull()?.first
+                ?: subSecPairs.firstOrNull()?.first
                 ?: "default"
         }
 
         // 展平成 (secTitle, subTitle, body) 任务列表
         data class Slice(val section: String, val subSection: String, val body: String)
         val slices = mutableListOf<Slice>()
-        for ((secTitle, secBody) in sections) {
-            val subSections = MarkdownSplitter.splitBySubHeading(secBody)
-            for ((subTitle, subBody) in subSections) {
-                slices += Slice(secTitle, subTitle, subBody)
+        val sections = MarkdownSplitter.splitByHeading(md)
+        for ((secTitle, subTitle) in subSecPairs) {
+            val secBody = sections.firstOrNull { it.first == secTitle }?.second ?: continue
+            if (subTitle == secTitle) {
+                slices += Slice(secTitle, secTitle, secBody)
+            } else {
+                val subParts = MarkdownSplitter.splitBySubHeading(secBody)
+                val matched = subParts.filter { it.first == subTitle }
+                if (matched.isEmpty()) {
+                    slices += Slice(secTitle, subTitle, secBody)
+                } else {
+                    matched.forEach { (_, body) ->
+                        slices += Slice(secTitle, subTitle, body)
+                    }
+                }
             }
         }
 

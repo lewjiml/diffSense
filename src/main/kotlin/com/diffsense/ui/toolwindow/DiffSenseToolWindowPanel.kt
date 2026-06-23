@@ -95,8 +95,11 @@ class DiffSenseToolWindowPanel(
         )
     }
 
-    /** 改进 12：基线分支自动检测（启动时填充） */
-    private val baseBranchField = JBTextField("develop")
+    /** 问题 5b：排除路径多行输入框（每行一个 pathspec，支持目录/文件） */
+    private val excludePathsArea = JBTextArea(4, 40).apply {
+        emptyText.text = "排除路径（每行一个，相对仓库根）。留空=不排除"
+        text = DEFAULT_EXCLUDE_PATHS.joinToString("\n")
+    }
 
     private val resultTable = CoverageResultTable(onEdited = {
         lastReport?.let { report ->
@@ -112,9 +115,6 @@ class DiffSenseToolWindowPanel(
     private val tokenLabel = JBLabel("💰 Token：parse 0 / scan 0")
 
     init {
-        // 改进 12：启动时尝试自动检测基线分支
-        detectBaseBranch()
-
         val tabs = JBTabbedPane().apply {
             tabPlacement = JTabbedPane.TOP
         }
@@ -140,14 +140,18 @@ class DiffSenseToolWindowPanel(
             .addComponent(slicePreviewLabel)
             .addVerticalGap(4)
             .addComponent(JPanel(FlowLayout(FlowLayout.LEFT)).apply {
-                add(JButton("▶ 拆解需求", DiffSenseIcons.PARSE).apply {
-                    addActionListener { startParse() }
+                // 问题 3b：合并「拆解需求」+「保存为JSON」为「拆解并保存」
+                add(JButton("▶ 拆解并保存", DiffSenseIcons.PARSE).apply {
+                    toolTipText = "拆解需求并直接写入 JSON 文件，然后刷新列表"
+                    addActionListener { startParseAndSave() }
                 })
-                add(JButton("💾 保存为 JSON").apply {
-                    addActionListener { saveRequirementsJson() }
+                // 问题 3b：新增「从 JSON 更新列表」按钮
+                add(JButton("↻ 从 JSON 更新列表").apply {
+                    toolTipText = "读取当前选中的 JSON 文件，刷新下方列表（在编辑器里手动改完 JSON 后点这个）"
+                    addActionListener { reloadFromJson() }
                 })
             })
-            .addComponent(JBLabel("需求列表（双击单元格可编辑，选中行在下方详情编辑）：").apply {
+            .addComponent(JBLabel("需求列表（只读；编辑请改 JSON 后点「从 JSON 更新列表」）：").apply {
                 border = BorderFactory.createEmptyBorder(4, 0, 2, 0)
                 foreground = JBColor.gray
             })
@@ -174,7 +178,13 @@ class DiffSenseToolWindowPanel(
                     }, BorderLayout.EAST)
                 }
             )
-            .addLabeledComponent("基线分支", baseBranchField)
+            .addLabeledComponent(
+                "排除路径",
+                JBScrollPane(excludePathsArea).apply {
+                    preferredSize = java.awt.Dimension(400, 80)
+                    border = BorderFactory.createLineBorder(JBColor.border())
+                }
+            )
             .addVerticalGap(4)
             .addComponent(JPanel(FlowLayout(FlowLayout.LEFT)).apply {
                 add(JButton("▶ 开始扫描", DiffSenseIcons.SCAN).apply {
@@ -249,7 +259,9 @@ class DiffSenseToolWindowPanel(
             .filter { it.isNotEmpty() }
 
     // ==================== 需求 Tab 动作 ====================
-    private fun startParse() {
+
+    /** 问题 3b：合并「拆解需求」+「保存为JSON」——拆解完成后直接落盘 JSON 并刷新列表 */
+    private fun startParseAndSave() {
         val settings = DiffSenseSettings.getInstance()
         val config = settings.toConfig()
 
@@ -273,33 +285,39 @@ class DiffSenseToolWindowPanel(
             return
         }
 
-        // 改进 11：不再每次 reset，改为累计统计
         requirementTable.clear()
         logPanel.clear()
 
         val sectionKeywords = parseSectionKeywords()
         val md = mdFile.readText(Charsets.UTF_8)
 
-        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "DiffSense 拆解需求", true) {
+        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "DiffSense 拆解并保存需求", true) {
             override fun run(indicator: ProgressIndicator) {
                 try {
                     logPanel.appendLine("开始拆解需求：${mdFile.name}，板块过滤=${sectionKeywords.ifEmpty { listOf("全部") }}")
                     val parser = RequirementParser(config, indicator)
                     val doc = parser.parse(
                         md = md,
-                        module = "",  // 改进 1：留空让 parser 自动从板块关键词推导
+                        module = "",  // 留空让 parser 自动从板块关键词推导
                         sectionKeywords = sectionKeywords,
                         onProgress = { line -> logPanel.appendLine(line) },
                     )
                     lastDocument = doc
                     logPanel.appendLine(TokenStats.report())
 
+                    // 问题 3b：拆解后直接落盘 JSON
+                    val json = parser.toJson(doc)
+                    val target = File(project.basePath, "requirements-${System.currentTimeMillis() / 1000}.json")
+                    target.writeText(json, Charsets.UTF_8)
+                    logPanel.appendLine("需求 JSON 已保存：${target.name}")
+
                     ApplicationManager.getApplication().invokeLater {
+                        reqJsonField.text = target.absolutePath
                         requirementTable.showRequirements(doc.requirements)
                         refreshToken()
                         Messages.showInfoMessage(
                             project,
-                            "需求拆解完成：共 ${doc.total} 条需求",
+                            "需求拆解完成：共 ${doc.total} 条需求\nJSON 已保存：${target.absolutePath}",
                             "完成"
                         )
                     }
@@ -314,22 +332,31 @@ class DiffSenseToolWindowPanel(
         })
     }
 
-    /** 把当前需求列表导出为 JSON 文件 */
-    private fun saveRequirementsJson() {
-        val doc = lastDocument
-        if (doc == null || doc.requirements.isEmpty()) {
-            Messages.showInfoMessage(project, "请先拆解需求", "无数据")
+    /** 问题 3b：从当前选中的 JSON 文件重新加载需求列表（编辑器里手改 JSON 后点此刷新） */
+    private fun reloadFromJson() {
+        val path = reqJsonField.text.trim()
+        if (path.isBlank() || path.startsWith("(")) {
+            Messages.showWarningDialog(project, "请先在「需求 JSON」字段选择一个 JSON 文件", "缺少文件")
             return
         }
-        doc.requirements = requirementTable.getRequirements()
-        doc.total = doc.requirements.size
-
-        val parser = RequirementParser(DiffSenseSettings.getInstance().toConfig())
-        val json = parser.toJson(doc)
-        val target = File(project.basePath, "requirements-${System.currentTimeMillis() / 1000}.json")
-        target.writeText(json, Charsets.UTF_8)
-        Messages.showInfoMessage(project, "已保存：${target.absolutePath}", "保存成功")
-        logPanel.appendLine("需求 JSON 已保存：${target.name}")
+        val jsonFile = File(path)
+        if (!jsonFile.exists()) {
+            Messages.showWarningDialog(project, "文件不存在：$path", "错误")
+            return
+        }
+        try {
+            val json = jsonFile.readText(Charsets.UTF_8)
+            val parser = RequirementParser(DiffSenseSettings.getInstance().toConfig())
+            val doc = parser.fromJson(json)
+            lastDocument = doc
+            requirementTable.showRequirements(doc.requirements)
+            refreshToken()
+            logPanel.appendLine("↻ 已从 JSON 重新加载：${jsonFile.name}（${doc.total} 条需求）")
+            Messages.showInfoMessage(project, "已加载 ${doc.total} 条需求", "刷新成功")
+        } catch (e: Exception) {
+            log.warn("从 JSON 加载失败: ${e.message}")
+            Messages.showErrorDialog(project, e.message ?: "解析失败", "加载失败")
+        }
     }
 
     // ==================== 扫描 Tab 动作 ====================
@@ -361,7 +388,10 @@ class DiffSenseToolWindowPanel(
             return
         }
 
-        val baseBranch = baseBranchField.text.trim().ifBlank { "develop" }
+        // 问题 5b：读取排除路径
+        val excludePaths = excludePathsArea.text.lines()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
 
         resultTable.clear()
         // 改进 11：不再 reset，累计统计
@@ -369,12 +399,16 @@ class DiffSenseToolWindowPanel(
         ProgressManager.getInstance().run(object : Task.Backgroundable(project, "DiffSense 扫描覆盖度", true) {
             override fun run(indicator: ProgressIndicator) {
                 try {
-                    logPanel.appendLine("开始扫描：基线 $baseBranch，需求 ${doc.requirements.size} 条")
-                    val diff = DiffCollector.collectDiff(project, baseBranch)
+                    logPanel.appendLine("开始扫描：需求 ${doc.requirements.size} 条，git diff HEAD（排除 ${excludePaths.size} 条路径）")
+                    val diff = DiffCollector.collectDiff(
+                        project = project,
+                        excludePaths = excludePaths,
+                        onProgress = { line -> logPanel.appendLine(line) },
+                    )
                     if (diff.isBlank()) {
-                        logPanel.appendLine("✗ 未收集到代码改动（diff 为空）")
+                        logPanel.appendLine("✗ 未收集到代码改动（git diff HEAD 为空）")
                         ApplicationManager.getApplication().invokeLater {
-                            Messages.showWarningDialog(project, "未收集到代码改动（diff 为空），请确认基线分支正确", "无 diff")
+                            Messages.showWarningDialog(project, "未收集到代码改动（git diff HEAD 为空），请确认工作区有未提交改动", "无 diff")
                         }
                         return
                     }
@@ -385,7 +419,6 @@ class DiffSenseToolWindowPanel(
                         requirements = doc.requirements.filter { it.enabled },
                         diff = diff,
                         module = doc.module,
-                        baseBranch = baseBranch,
                         onProgress = { line -> logPanel.appendLine(line) },
                     )
                     lastReport = report
@@ -444,28 +477,6 @@ class DiffSenseToolWindowPanel(
             "scan ${TokenStats.snapshot(TokenStats.Stage.SCAN).totalTokens}"
     }
 
-    /** 改进 12：自动检测基线分支（git symbolic-ref） */
-    private fun detectBaseBranch() {
-        try {
-            val basePath = project.basePath ?: return
-            val processBuilder = ProcessBuilder("git", "symbolic-ref", "refs/remotes/origin/HEAD")
-            processBuilder.directory(File(basePath))
-            processBuilder.redirectErrorStream(true)
-            val process = processBuilder.start()
-            val output = process.inputStream.bufferedReader().readText().trim()
-            process.waitFor()
-            if (output.startsWith("refs/remotes/origin/")) {
-                val branch = output.removePrefix("refs/remotes/origin/")
-                if (branch.isNotBlank()) {
-                    baseBranchField.text = branch
-                    log.info("自动检测到基线分支：$branch")
-                }
-            }
-        } catch (e: Exception) {
-            log.debug("基线分支自动检测失败（忽略，使用默认 develop）：${e.message}")
-        }
-    }
-
     /** 根据覆盖度结果重新汇总（编辑后调用） */
     private fun rebuildSummary(results: List<CoverageResult>): ScanReport.Summary {
         val total = results.size
@@ -483,7 +494,7 @@ class DiffSenseToolWindowPanel(
         sb.appendLine("# DiffSense 覆盖度报告")
         sb.appendLine()
         sb.appendLine("- 模块：${report.module}")
-        sb.appendLine("- 基线：${report.baseBranch}")
+        sb.appendLine("- diff：git diff HEAD")
         sb.appendLine("- 时间：${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.util.Date(report.timestamp))}")
         sb.appendLine("- 覆盖率：${report.summary.covered}/${report.summary.total}（${(report.summary.coverageRate * 100).toInt()}%）")
         sb.appendLine()
@@ -532,5 +543,10 @@ class DiffSenseToolWindowPanel(
             else JBColor(0xC62828, 0xEF5350)
             refreshToken()
         }
+    }
+
+    companion object {
+        /** 问题 5b：默认排除路径（相对仓库根，支持 pathspec 通配） */
+        private val DEFAULT_EXCLUDE_PATHS = listOf("*.md", "docs/", "README*", ".gitignore")
     }
 }

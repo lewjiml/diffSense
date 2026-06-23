@@ -46,7 +46,12 @@ object MarkdownSplitter {
     }
 
     /**
-     * 按 `###` 三级标题进一步分块；若没有子标题但含表格，则按表格行切分
+     * 按 `###` 三级标题进一步分块
+     *
+     * 问题 2 改进：每个 ### 内部如果含大表格（≥3 行），按表格行进一步切分，
+     * 避免 12 行表格整块塞给 LLM 导致截断。
+     *
+     * 若没有 ### 子标题但含表格，同样按表格行切分。
      *
      * @param sectionBody 单个板块的内容（来自 [splitByHeading] 的 body）
      * @return (子板块标题, 子板块内容) 列表
@@ -65,7 +70,13 @@ object MarkdownSplitter {
             val start = m.range.first
             val end = if (i + 1 < matches.size) matches[i + 1].range.first else sectionBody.length
             val body = sectionBody.substring(start, end).trim()
-            result.add(title to body)
+            // 问题 2：### 内部如果有大表格，按表格行进一步切分
+            val tableSlices = splitByTableRows(body)
+            if (tableSlices.size > 1) {
+                result.addAll(tableSlices)
+            } else {
+                result.add(title to body)
+            }
         }
         return result
     }
@@ -124,6 +135,61 @@ object MarkdownSplitter {
         HEADING_3.findAll(sectionBody).map { it.groupValues[1].trim() }.toList()
 
     /**
+     * 列出文档中所有 `###` 子板块标题（跨所有 ## 板块）
+     *
+     * 问题 1 改进：支持按 ### 级别关键词过滤。
+     */
+    fun listAllSubSections(md: String): List<String> {
+        val cleaned = stripStrikethrough(md)
+        return HEADING_3.findAll(cleaned).map { it.groupValues[1].trim() }.toList()
+    }
+
+    /**
+     * 根据关键词过滤，返回需要拆解的 (板块标题, 子板块标题) 列表
+     *
+     * 问题 1 改进：两层匹配下钻到 ### 级别。
+     *
+     * 匹配规则：
+     *   1. 关键词命中某个 ##（如「2.10」）→ 拆该 ## 下所有 ###（2.10.1 + 2.10.2 + ...）
+     *   2. 关键词没命中 ## 但命中某个 ###（如「2.10.1」）→ 只拆那个 ###
+     *   3. 空列表 → 全部板块的全部子板块
+     *
+     * @return 列表元素 = (所在 ## 板块标题, ### 子板块标题)
+     */
+    fun filterToSubSections(md: String, keywords: List<String>): List<Pair<String, String>> {
+        if (keywords.isEmpty()) {
+            // 全部：每个 ## 下所有 ###
+            return splitByHeading(md).flatMap { (secTitle, secBody) ->
+                val subs = listSubSections(secBody)
+                if (subs.isEmpty()) listOf(secTitle to secTitle)
+                else subs.map { sub -> secTitle to sub }
+            }
+        }
+
+        val sections = splitByHeading(md)
+        val result = mutableListOf<Pair<String, String>>()
+
+        for ((secTitle, secBody) in sections) {
+            val secMatched = keywords.any { kw -> secTitle.contains(kw.trim(), ignoreCase = true) }
+            val subs = listSubSections(secBody)
+
+            if (secMatched) {
+                // 规则 1：关键词命中 ## → 拆该板块下所有 ###
+                if (subs.isEmpty()) result.add(secTitle to secTitle)
+                else result.addAll(subs.map { sub -> secTitle to sub })
+            } else if (subs.isNotEmpty()) {
+                // 规则 2：关键词没命中 ##，但可能命中 ### → 只拆命中的 ###
+                val matchedSubs = subs.filter { sub ->
+                    keywords.any { kw -> sub.contains(kw.trim(), ignoreCase = true) }
+                }
+                result.addAll(matchedSubs.map { sub -> secTitle to sub })
+            }
+            // ## 和 ### 都没命中 → 跳过
+        }
+        return result
+    }
+
+    /**
      * 根据板块过滤关键词，返回匹配的板块标题列表
      *
      * 匹配规则：包含匹配（关键词是标题的子串即命中）。
@@ -139,24 +205,53 @@ object MarkdownSplitter {
      * 预览将拆解出多少个片段（不调用 LLM）
      *
      * 用于「拆解前预览片段数」功能，让用户预估成本。
+     * 问题 1 改进：使用 filterToSubSections 的两层匹配逻辑（下钻到 ###）。
      */
     fun countSlices(md: String, sectionKeywords: List<String> = emptyList()): Int {
-        val sections = splitByHeading(md)
-            .filter { sec ->
-                if (sectionKeywords.isEmpty()) true
-                else sectionKeywords.any { kw -> sec.first.contains(kw.trim(), ignoreCase = true) }
-            }
+        val subSecPairs = filterToSubSections(md, sectionKeywords)
+        // 每个 (sec, sub) 对应一个或多个实际片段（### 内表格可能再切分）
         var count = 0
-        for ((_, body) in sections) {
-            val subs = splitBySubHeading(body)
-            count += subs.size
+        val sections = splitByHeading(md)
+        for ((secTitle, subTitle) in subSecPairs) {
+            val secBody = sections.firstOrNull { it.first == secTitle }?.second ?: continue
+            if (subTitle == secTitle) {
+                // 板块无子标题，可能按表格行切分
+                val tableSlices = splitByTableRows(secBody)
+                count += if (tableSlices.size > 1) tableSlices.size else 1
+            } else {
+                // 找到该 ### 的内容
+                val allSubs = splitBySubHeading(secBody)
+                val subBody = allSubs.firstOrNull { it.first == subTitle }?.second
+                if (subBody != null) {
+                    val tableSlices = splitByTableRows(subBody)
+                    count += if (tableSlices.size > 1) tableSlices.size else 1
+                } else {
+                    count += 1
+                }
+            }
         }
         return count
     }
 
-    /** 剔除 ~~删除线~~ 噪声（废弃内容） */
-    fun stripStrikethrough(md: String): String =
-        STRIKETHROUGH.replace(md) { "" }
+    /** 剔除 ~~删除线~~ 噪声（废弃内容）
+     *
+     * 问题 3c 改进：行级判断。
+     *   - 若整行剔除删除线后只剩空白/分隔符（如 `| ** | |`），整行丢弃
+     *   - 否则只剔除删除线文本，保留行其余内容（如 `| ~~位点~~ 致病性 |` → `| 致病性 |`）
+     */
+    fun stripStrikethrough(md: String): String {
+        return md.lines().joinToString("\n") { line ->
+            val cleaned = STRIKETHROUGH.replace(line) { "" }
+            // 判断剔除后是否只剩无意义字符（空白、表格分隔符、markdown 强调符）
+            val residue = cleaned
+                .replace("|", " ")
+                .replace("*", " ")
+                .replace("-", " ")
+                .replace(":", " ")
+                .trim()
+            if (residue.isEmpty()) "" else cleaned
+        }
+    }
 
     /** 提取文档的一级标题（# 标题），没有则返回 null */
     private fun extractDocTitle(md: String): String? {

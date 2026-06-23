@@ -100,7 +100,6 @@ class DiffSenseCheckinHandler(
                 requirements = doc.requirements.filter { it.enabled },
                 diff = diff,
                 module = "pre-commit",
-                baseBranch = "staged",
             )
 
             uncoveredCount = report.summary.uncovered + report.summary.partial
