@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  DiffSense · AI 需求覆盖度审查插件
+  =====================================
+  功能：
+    1. WizardDialog —— 三步向导弹窗（分割需求 / 扫描代码 / 一键Run）
+    2. ToolWindow  —— 常驻右侧工具窗（历史报告）
+    3. Pre-commit  —— CheckinHandler，提交前自动扫描
+    4. Editor 右键菜单 —— 审查选中代码覆盖了哪些需求
+-->
+<idea-plugin>
+    <id>com.diffsense.intellij</id>
+    <name>DiffSense</name>
+    <vendor email="support@diffsense.dev" url="https://github.com/diffsense">DiffSense</vendor>
+
+    <!-- 明确兼容范围：2023.1 (231) ~ 2025.2 (252) -->
+    <idea-version since-build="231" until-build="252.*"/>
+
+    <description><![CDATA[
+        <h2>DiffSense · AI 需求覆盖度审查</h2>
+        <p>让每一行代码改动，都有需求可循。</p>
+        <ul>
+            <li>📋 分割需求：从需求文档自动拆解成结构化需求条目</li>
+            <li>🔍 扫描代码：判断代码改动对需求的覆盖情况</li>
+            <li>🪝 Pre-commit：提交前自动检查未覆盖需求</li>
+            <li>🎨 Tool Window：历史报告与需求库管理</li>
+        </ul>
+    ]]></description>
+
+    <change-notes><![CDATA[
+        <em>0.1.0 初版</em><br/>
+        - 三步向导弹窗（Parse / Scan / Run）<br/>
+        - 结果表格展示覆盖度<br/>
+        - Token 消耗统计<br/>
+        - Pre-commit 集成<br/>
+        - Tool Window 历史报告
+    ]]></change-notes>
+
+    <!-- 依赖 -->
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.vcs</depends>
+    <depends>Git4Idea</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+
+        <!-- ==================== 配置入口 ==================== -->
+        <!-- Settings → Tools → DiffSense -->
+        <applicationConfigurable
+            id="diffsense.settings"
+            displayName="DiffSense"
+            groupId="tools"
+            implementation="com.diffsense.settings.DiffSenseSettingsConfigurable"/>
+
+        <applicationService
+            serviceImplementation="com.diffsense.settings.DiffSenseSettings"/>
+
+        <!-- Tool Window 服务（project-level） -->
+        <projectService
+            serviceImplementation="com.diffsense.ui.toolwindow.DiffSenseToolWindowService"/>
+
+        <!-- ==================== Tool Window ==================== -->
+        <!-- 右侧常驻工具窗 -->
+        <toolWindow
+            id="DiffSense"
+            anchor="right"
+            icon="com.diffsense.icons.DiffSenseIcons.TOOL_WINDOW"
+            factoryClass="com.diffsense.ui.toolwindow.DiffSenseToolWindowFactory"/>
+
+        <!-- ==================== Pre-commit 集成 ==================== -->
+        <checkinHandlerFactory
+            implementation="com.diffsense.git.DiffSenseCheckinHandlerFactory"/>
+
+        <!-- ==================== 后台任务注册 ==================== -->
+        <!-- 用于异步执行 LLM 调用 -->
+    </extensions>
+
+    <!-- ==================== Action 注册 ==================== -->
+    <actions>
+
+        <!-- 顶部菜单入口：Tools → DiffSense → 打开向导 -->
+        <action
+            id="DiffSense.OpenWizard"
+            class="com.diffsense.actions.OpenWizardAction"
+            text="打开 DiffSense 向导"
+            description="打开需求覆盖度审查向导">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift D"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <!-- Editor 右键菜单：审查选中代码 -->
+        <action
+            id="DiffSense.ScanSelection"
+            class="com.diffsense.actions.ScanSelectionAction"
+            text="审查选中代码覆盖的需求"
+            description="分析选中的代码覆盖了哪些需求">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+
+    </actions>
+
+</idea-plugin>

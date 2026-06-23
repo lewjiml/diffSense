@@ -1,4 +1,26 @@
-node_modules/
-*.log
+# Gradle
+.gradle/
+# 忽略 build 下除 distributions 外的所有内容
+build/*
+!build/distributions/
+build/distributions/*
+!build/distributions/*.zip
+!gradle/wrapper/gradle-wrapper.jar
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 本地配置
 .env
-tmp/
+.aireview.yml
+
+# 运行产物
+*.log

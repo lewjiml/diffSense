@@ -1,11 +1,36 @@
-# AI 需求扫描 — 模块→代码路径映射配置
-# 放在 git 仓库根目录，scan 命令会自动读取
+# DiffSense 配置示例
+# 把此文件复制为 .aireview.yml 并根据项目实际情况修改
+
+# ==================== LLM 配置 ====================
+# 推荐通过环境变量注入 API Key（更安全）
+# 环境变量：AI_API_KEY、AI_BASE_URL、AI_MODEL
+llm:
+  base_url: https://api.openai.com/v1
+  model: claude-sonnet-4-20250514
+  # api_key: sk-xxx  # 不推荐写在这里
+
+# ==================== 模块 → 代码路径映射 ====================
+# 用于 scan 阶段只关注相关模块的代码改动
 modules:
+  UserService:
+    paths:
+      - "src/main/java/com/example/user/**"
+      - "src/main/java/com/example/auth/**"
+  OrderService:
+    paths:
+      - "src/main/java/com/example/order/**"
   LargeCNV:
-    services:
-      - service: interpretation-service
-        paths:
-          - src/main/java/com/bgi/interpret/largecnv/
-      - service: report-service
-        paths:
-          - src/main/java/com/bgi/report/largecnv/
+    paths:
+      - "src/main/java/com/example/largecnv/**"
+
+# ==================== 严重度阈值 ====================
+# strict : 只展示致命 + 严重
+# normal : 致命 + 严重 + 一般（推荐）
+# relaxed: 全部展示
+severity: normal
+
+# ==================== Pre-commit 拦截 ====================
+# 启用后，git commit 时会自动扫描暂存区改动
+# pre_commit:
+#   enabled: true
+#   max_uncovered: 0  # 未覆盖数超过此值则拦截提交
