@@ -64,7 +64,8 @@ class RequirementTable(
         setShowGrid(false)
         intercellSpacing = Dimension(0, 0)
         rowHeight = 56
-        autoResizeMode = JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS
+        autoResizeMode = JTable.AUTO_RESIZE_OFF
+        tableHeader.resizingAllowed = true
         columnModel.getColumn(Col.ENABLED).preferredWidth = 45
         columnModel.getColumn(Col.ID).preferredWidth = 90
         columnModel.getColumn(Col.TITLE).preferredWidth = 220

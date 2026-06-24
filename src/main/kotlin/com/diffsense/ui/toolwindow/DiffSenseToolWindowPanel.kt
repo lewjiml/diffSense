@@ -96,6 +96,15 @@ class DiffSenseToolWindowPanel(
         border = BorderFactory.createEmptyBorder(0, 0, 0, 0)
     }
 
+    /** 需求 Tab：可手填/浏览的 JSON 路径输入框（方便直接载入已有 JSON 查看） */
+    private val reqJsonPathField = TextFieldWithBrowseButton().apply {
+        toolTipText = "可手动填写或选择已有的 requirements.json，点「载入」查看需求列表"
+        addBrowseFolderListener(
+            "选择需求 JSON", "选择已有的 requirements.json 直接载入", project,
+            FileChooserDescriptorFactory.createSingleFileDescriptor("json")
+        )
+    }
+
     // ==================== 扫描 Tab 组件 ====================
     private val reqJsonField = TextFieldWithBrowseButton().apply {
         addBrowseFolderListener(
@@ -152,7 +161,18 @@ class DiffSenseToolWindowPanel(
                 })
             })
             .addComponent(jsonPathLabel)
-            .addComponent(JBLabel("需求列表（双击标题/描述可直接编辑，修改后自动写回 JSON）：").apply {
+            .addLabeledComponent(
+                "需求 JSON",
+                JPanel(BorderLayout()).apply {
+                    add(reqJsonPathField, BorderLayout.CENTER)
+                    add(JButton("载入").apply {
+                        margin = java.awt.Insets(2, 6, 2, 6)
+                        toolTipText = "载入指定 JSON 文件，显示到下方需求列表"
+                        addActionListener { loadRequirementsFromJson() }
+                    }, BorderLayout.EAST)
+                }
+            )
+            .addComponent(JBLabel("需求列表（双击标题/描述可直接编辑，修改后点「💾 保存到 JSON」落盘）：").apply {
                 border = BorderFactory.createEmptyBorder(4, 0, 2, 0)
                 foreground = JBColor.gray
             })
@@ -249,7 +269,8 @@ class DiffSenseToolWindowPanel(
         doc.requirements = requirementTable.getRequirements()
         doc.total = doc.requirements.size
 
-        val path = reqJsonField.text.trim()
+        // 优先使用需求 Tab 的路径，兜底用扫描 Tab 的路径
+        val path = reqJsonPathField.text.trim().ifBlank { reqJsonField.text.trim() }
         if (path.isBlank() || path.startsWith("(") || !File(path).exists()) {
             Messages.showWarningDialog(project, "未找到有效的 JSON 文件路径，请先拆解并保存需求", "缺少文件")
             return
@@ -258,10 +279,41 @@ class DiffSenseToolWindowPanel(
             val parser = RequirementParser(DiffSenseSettings.getInstance().toConfig())
             File(path).writeText(parser.toJson(doc), Charsets.UTF_8)
             jsonPathLabel.text = "JSON：${File(path).name}（已保存）"
+            // 同步两边路径
+            reqJsonPathField.text = path
+            reqJsonField.text = path
             logPanel.appendLine("💾 需求已保存到 JSON：${File(path).name}（${doc.total} 条）")
         } catch (e: Exception) {
             log.warn("写回 JSON 失败：${e.message}")
             Messages.showErrorDialog(project, e.message ?: "未知错误", "保存失败")
+        }
+    }
+
+    /** 从需求 Tab 的 JSON 路径输入框载入已有 JSON，显示到需求列表 */
+    private fun loadRequirementsFromJson() {
+        val path = reqJsonPathField.text.trim()
+        if (path.isBlank()) {
+            Messages.showWarningDialog(project, "请先填写或选择 JSON 文件路径", "缺少路径")
+            return
+        }
+        if (!File(path).exists()) {
+            Messages.showWarningDialog(project, "文件不存在：$path", "文件无效")
+            return
+        }
+        try {
+            val json = File(path).readText(Charsets.UTF_8)
+            val parser = RequirementParser(DiffSenseSettings.getInstance().toConfig())
+            val doc = parser.fromJson(json)
+            lastDocument = doc
+            requirementTable.showRequirements(doc.requirements)
+            jsonPathLabel.text = "JSON：${File(path).name}（已载入）"
+            // 同步到扫描 Tab，方便后续直接扫描
+            reqJsonField.text = path
+            logPanel.appendLine("📂 已载入需求 JSON：${File(path).name}（${doc.total} 条）")
+            Messages.showInfoMessage(project, "已载入 ${doc.total} 条需求", "载入成功")
+        } catch (e: Exception) {
+            log.warn("载入 JSON 失败：${e.message}")
+            Messages.showErrorDialog(project, e.message ?: "未知错误", "载入失败")
         }
     }
 
@@ -346,6 +398,7 @@ class DiffSenseToolWindowPanel(
 
                     ApplicationManager.getApplication().invokeLater {
                         reqJsonField.text = target.absolutePath
+                        reqJsonPathField.text = target.absolutePath
                         jsonPathLabel.text = "JSON：${target.name}"
                         requirementTable.showRequirements(doc.requirements)
                         refreshToken()
