@@ -1,19 +1,20 @@
 package com.diffsense.icons
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.util.IconLoader
 import javax.swing.Icon
 
 /**
  * DiffSense 图标统一入口
  *
- * 目前复用 IntelliJ 自带图标，后续可替换为自定义 SVG。
- * 使用方式：DiffSenseIcons.TOOL_WINDOW
+ * TOOL_WINDOW 使用自定义「D」logo（resources/icons/diffsenseToolWindow.svg），
+ * 其余复用 IntelliJ 自带图标。
  */
 object DiffSenseIcons {
 
-    /** Tool Window 主图标（右侧栏） */
+    /** Tool Window 主图标（右侧栏）——自定义大写 D */
     @JvmField
-    val TOOL_WINDOW: Icon = AllIcons.Toolwindows.ToolWindowProject
+    val TOOL_WINDOW: Icon = IconLoader.getIcon("/icons/diffsenseToolWindow.svg", DiffSenseIcons::class.java)
 
     /** 向导 / 打开按钮 */
     @JvmField

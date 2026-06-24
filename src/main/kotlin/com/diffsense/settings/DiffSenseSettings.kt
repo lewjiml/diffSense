@@ -38,6 +38,8 @@ class DiffSenseSettings : PersistentStateComponent<DiffSenseSettings.State> {
         var preCommitMaxUncovered: Int = 0,
         /** 需求拆解并发度（同时调用 LLM 的请求数，默认 3） */
         var parseConcurrency: Int = 3,
+        /** 单次请求最大 token（默认 8192；输出被截断时调大） */
+        var maxTokens: Int = 8192,
     )
 
     private var state = State()
@@ -60,6 +62,7 @@ class DiffSenseSettings : PersistentStateComponent<DiffSenseSettings.State> {
             severity = DiffSenseConfig.Severity.fromValue(state.severity),
             timeoutMs = state.timeoutSec * 1000,
             parseConcurrency = state.parseConcurrency.coerceAtLeast(1),
+            maxTokens = state.maxTokens.coerceAtLeast(1024),
         )
     }
 

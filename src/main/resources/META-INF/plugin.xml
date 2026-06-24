@@ -27,6 +27,10 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <em>0.6.0</em><br/>
+        - 修复 JSON 截断解析：extractJsonArray 改为括号深度计数，不再被嵌套数组的 ] 误判为完整<br/>
+        - max_tokens 默认值从 4096 调到 8192，并在 Settings 面板新增可配置输入框<br/>
+        - Tool Window 图标替换为自定义大写「D」logo<br/>
         <em>0.4.0</em><br/>
         - 过滤下钻到 ### 级别：板块关键词命中 ## 时纳入其下所有 ###；直接命中 ### 时只拆该子板块<br/>
         - 表格行切分下沉到 ### 内部：每个 ### 内的大表格也按行切分，避免整块塞入 LLM 被截断<br/>

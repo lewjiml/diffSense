@@ -35,6 +35,7 @@ class DiffSenseSettingsPanel {
     private val preCommitCheck = JBCheckBox("启用 Pre-commit 拦截", false)
     private val preCommitMaxField = JBTextField().apply { emptyText.text = "0" }
     private val parseConcurrencyField = JBTextField().apply { emptyText.text = "3" }
+    private val maxTokensField = JBTextField().apply { emptyText.text = "8192" }
 
     private val rootPanel: JPanel = FormBuilder.createFormBuilder()
         .addLabeledComponent("API Base URL", baseUrlField)
@@ -45,6 +46,7 @@ class DiffSenseSettingsPanel {
         .addComponent(preCommitCheck)
         .addLabeledComponent("Pre-commit 最大未覆盖数", preCommitMaxField)
         .addLabeledComponent("需求拆解并发度", parseConcurrencyField)
+        .addLabeledComponent("最大 token（输出截断时调大）", maxTokensField)
         .addComponentFillVertically(JPanel(), 0)
         .panel
 
@@ -61,6 +63,7 @@ class DiffSenseSettingsPanel {
         preCommitCheck.isSelected = s.preCommitEnabled
         preCommitMaxField.text = s.preCommitMaxUncovered.toString()
         parseConcurrencyField.text = s.parseConcurrency.toString()
+        maxTokensField.text = s.maxTokens.toString()
     }
 
     /** 从 UI 写回 DiffSenseSettings */
@@ -74,6 +77,7 @@ class DiffSenseSettingsPanel {
         s.preCommitEnabled = preCommitCheck.isSelected
         s.preCommitMaxUncovered = preCommitMaxField.text.trim().toIntOrNull() ?: 0
         s.parseConcurrency = parseConcurrencyField.text.trim().toIntOrNull()?.coerceAtLeast(1) ?: 3
+        s.maxTokens = maxTokensField.text.trim().toIntOrNull()?.coerceAtLeast(1024) ?: 8192
         return true
     }
 

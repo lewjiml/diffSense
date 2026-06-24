@@ -28,8 +28,8 @@ data class DiffSenseConfig(
     /** LLM 调用超时（毫秒） */
     val timeoutMs: Int = 180_000,
 
-    /** 单次请求最大 token */
-    val maxTokens: Int = 4096,
+    /** 单次请求最大 token（8192 适合大多数主流模型；如遇截断可在 Settings 调大） */
+    val maxTokens: Int = 8192,
 
     /**
      * 需求拆解阶段的并发度（同时调用 LLM 的请求数）

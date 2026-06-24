@@ -178,7 +178,12 @@ class RequirementParser(
         }
     }
 
-    /** 从 LLM 输出中提取 JSON 数组部分，并尝试修复截断 */
+    /**
+     * 从 LLM 输出中提取 JSON 数组部分，并尝试修复截断
+     *
+     * 改动 1（v5）：使用括号深度计数定位顶层数组的闭合 ]，
+     * 避免被 JSON 内部嵌套数组（如 acceptance、keywords 的 ]）误判为完整。
+     */
     private fun extractJsonArray(
         content: String,
         onProgress: ((String) -> Unit)? = null,
@@ -186,35 +191,39 @@ class RequirementParser(
     ): String? {
         val trimmed = content.trim()
 
-        // 1. 纯 JSON 数组
-        if (trimmed.startsWith("[") && trimmed.endsWith("]")) return trimmed
+        // 定位第一个 [
+        val startPos = trimmed.indexOf('[')
+        if (startPos < 0) {
+            log.warn("未找到 JSON 数组起始 [ [$context]，原始（前500字）：${trimmed.take(500)}")
+            onProgress?.invoke("⚠ [$context] 未找到 JSON 数组，已记录到日志")
+            return null
+        }
 
-        // 2. markdown 代码块包裹
-        val codeBlock = Regex("""```(?:json)?\s*(.+?)\s*```""", RegexOption.DOT_MATCHES_ALL)
-            .find(trimmed)
-        if (codeBlock != null) {
-            val inner = codeBlock.groupValues[1].trim()
-            if (inner.startsWith("[")) {
-                return if (inner.endsWith("]")) inner else repairTruncatedJson(inner, onProgress, context)
+        // 按括号深度找匹配的闭合 ]
+        var depth = 0
+        var inString = false
+        var escape = false
+        for (i in startPos until trimmed.length) {
+            val c = trimmed[i]
+            if (escape) { escape = false; continue }
+            if (c == '\\') { escape = true; continue }
+            if (c == '"') { inString = !inString; continue }
+            if (inString) continue
+            when (c) {
+                '[' -> depth++
+                ']' -> {
+                    depth--
+                    if (depth == 0) {
+                        // 顶层数组闭合，JSON 完整
+                        return trimmed.substring(startPos, i + 1)
+                    }
+                }
             }
         }
 
-        // 3. 带前后多余文本：取第一个 [ 到最后一个 ]
-        val first = trimmed.indexOf('[')
-        val last = trimmed.lastIndexOf(']')
-        if (first in 0 until last) {
-            return trimmed.substring(first, last + 1)
-        }
-
-        // 4. 只有 [ 没有 ]（尾部被截断）：尝试修复
-        if (first >= 0) {
-            val partial = trimmed.substring(first)
-            return repairTruncatedJson(partial, onProgress, context)
-        }
-
-        log.warn("无法提取 JSON [$context]，原始（前500字）：${trimmed.take(500)}")
-        onProgress?.invoke("⚠ [$context] 未找到 JSON 数组，已记录到日志")
-        return null
+        // 遍历完 depth 仍未归零 → 尾部截断，尝试修复
+        val partial = trimmed.substring(startPos)
+        return repairTruncatedJson(partial, onProgress, context)
     }
 
     /**
