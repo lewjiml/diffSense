@@ -85,7 +85,10 @@ class DiffSenseToolWindowPanel(
         border = BorderFactory.createEmptyBorder(0, 0, 0, 0)
     }
 
-    private val requirementTable: RequirementTable = RequirementTable(onEdited = ::onRequirementEdited)
+    private val requirementTable: RequirementTable = RequirementTable(
+        onEdited = ::onRequirementEdited,
+        onSave = ::saveRequirementsToJson,
+    )
 
     /** 改动 6（v4）：JSON 路径常驻标签 */
     private val jsonPathLabel = JBLabel("JSON：（未保存）").apply {
@@ -222,22 +225,43 @@ class DiffSenseToolWindowPanel(
         }
     }
 
-    /** 需求表格编辑后回调：同步回 lastDocument 并写回 JSON 文件 */
+    /** 需求表格编辑后回调：同步回 lastDocument（不立即写盘，避免频繁 IO） */
     private fun onRequirementEdited() {
         lastDocument?.let { doc ->
             doc.requirements = requirementTable.getRequirements()
             doc.total = doc.requirements.size
-            // 写回 JSON 文件
+            // 标记未保存
             val path = reqJsonField.text.trim()
             if (path.isNotBlank() && !path.startsWith("(") && File(path).exists()) {
-                try {
-                    val parser = RequirementParser(DiffSenseSettings.getInstance().toConfig())
-                    File(path).writeText(parser.toJson(doc), Charsets.UTF_8)
-                    jsonPathLabel.text = "JSON：${File(path).name}（已更新）"
-                } catch (e: Exception) {
-                    log.warn("写回 JSON 失败：${e.message}")
-                }
+                jsonPathLabel.text = "JSON：${File(path).name}（有未保存的修改）"
             }
+        }
+    }
+
+    /** 将当前需求列表写回 JSON 文件（保存按钮触发） */
+    private fun saveRequirementsToJson() {
+        val doc = lastDocument
+        if (doc == null) {
+            Messages.showInfoMessage(project, "没有可保存的需求数据", "无数据")
+            return
+        }
+        // 先同步最新表格内容
+        doc.requirements = requirementTable.getRequirements()
+        doc.total = doc.requirements.size
+
+        val path = reqJsonField.text.trim()
+        if (path.isBlank() || path.startsWith("(") || !File(path).exists()) {
+            Messages.showWarningDialog(project, "未找到有效的 JSON 文件路径，请先拆解并保存需求", "缺少文件")
+            return
+        }
+        try {
+            val parser = RequirementParser(DiffSenseSettings.getInstance().toConfig())
+            File(path).writeText(parser.toJson(doc), Charsets.UTF_8)
+            jsonPathLabel.text = "JSON：${File(path).name}（已保存）"
+            logPanel.appendLine("💾 需求已保存到 JSON：${File(path).name}（${doc.total} 条）")
+        } catch (e: Exception) {
+            log.warn("写回 JSON 失败：${e.message}")
+            Messages.showErrorDialog(project, e.message ?: "未知错误", "保存失败")
         }
     }
 

@@ -33,6 +33,7 @@ import javax.swing.table.TableCellRenderer
  */
 class RequirementTable(
     private val onEdited: () -> Unit = {},
+    private val onSave: () -> Unit = {},
 ) {
 
     /** 列索引 */
@@ -80,6 +81,7 @@ class RequirementTable(
                 onEdited()
             } else if (e.column == Col.DESCRIPTION && e.firstRow in allReqs.indices) {
                 allReqs[e.firstRow].description = model.getValueAt(e.firstRow, Col.DESCRIPTION) as String
+                onEdited()
             }
         }
     }
@@ -117,7 +119,12 @@ class RequirementTable(
                 margin = java.awt.Insets(2, 6, 2, 6)
                 addActionListener { setAllEnabled(false) }
             })
-            add(JBLabel("  （双击标题/描述可直接编辑，修改后自动写回 JSON）").apply {
+            add(JButton("💾 保存到 JSON").apply {
+                toolTipText = "将当前需求列表保存回 JSON 文件"
+                margin = java.awt.Insets(2, 6, 2, 6)
+                addActionListener { onSave() }
+            })
+            add(JBLabel("  （双击标题/描述可直接编辑，修改后自动写回 JSON；也可手动点保存）").apply {
                 foreground = JBColor.gray
                 border = EmptyBorder(0, 8, 0, 0)
             })
