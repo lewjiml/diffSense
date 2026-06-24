@@ -10,7 +10,7 @@
 <idea-plugin>
     <id>com.diffsense.intellij</id>
     <name>DiffSense</name>
-    <vendor email="support@diffsense.dev" url="https://github.com/diffsense">DiffSense</vendor>
+    <vendor email="Liu_jiam@163.com" url="https://gitee.com/jiaming-pot/diffsense-jm">DiffSense</vendor>
 
     <!-- 明确兼容范围：2023.1 (231) ~ 2025.2 (252) -->
     <idea-version since-build="231" until-build="252.*"/>
@@ -27,6 +27,12 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <em>0.7.0</em><br/>
+        - 需求列表描述列支持多行渲染与单元格内滚动，超长内容可上下滑动<br/>
+        - 启用列表头新增「全部启用 / 全部禁用」一键操作按钮<br/>
+        - 标题、描述列支持双击直接在列表内编辑，修改后自动同步写回 JSON 文件<br/>
+        - 移除「从 JSON 更新列表」按钮，编辑流程改为就地修改 + 自动落盘<br/>
+        - 修正 vendor 信息（邮箱与仓库地址）<br/>
         <em>0.6.0</em><br/>
         - 修复 JSON 截断解析：extractJsonArray 改为括号深度计数，不再被嵌套数组的 ] 误判为完整<br/>
         - max_tokens 默认值从 4096 调到 8192，并在 Settings 面板新增可配置输入框<br/>

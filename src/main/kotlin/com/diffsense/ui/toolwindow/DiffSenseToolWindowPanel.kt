@@ -142,19 +142,14 @@ class DiffSenseToolWindowPanel(
             .addComponent(slicePreviewLabel)
             .addVerticalGap(4)
             .addComponent(JPanel(FlowLayout(FlowLayout.LEFT)).apply {
-                // 问题 3b：合并「拆解需求」+「保存为JSON」为「拆解并保存」
+                // 「拆解需求」+「保存为JSON」合并为「拆解并保存」
                 add(JButton("▶ 拆解并保存", DiffSenseIcons.PARSE).apply {
                     toolTipText = "拆解需求并直接写入 JSON 文件，然后刷新列表"
                     addActionListener { startParseAndSave() }
                 })
-                // 问题 3b：新增「从 JSON 更新列表」按钮
-                add(JButton("↻ 从 JSON 更新列表").apply {
-                    toolTipText = "读取当前选中的 JSON 文件，刷新下方列表（在编辑器里手动改完 JSON 后点这个）"
-                    addActionListener { reloadFromJson() }
-                })
             })
             .addComponent(jsonPathLabel)
-            .addComponent(JBLabel("需求列表（只读；编辑请改 JSON 后点「从 JSON 更新列表」）：").apply {
+            .addComponent(JBLabel("需求列表（双击标题/描述可直接编辑，修改后自动写回 JSON）：").apply {
                 border = BorderFactory.createEmptyBorder(4, 0, 2, 0)
                 foreground = JBColor.gray
             })
@@ -227,11 +222,22 @@ class DiffSenseToolWindowPanel(
         }
     }
 
-    /** 需求表格编辑后回调：同步回 lastDocument */
+    /** 需求表格编辑后回调：同步回 lastDocument 并写回 JSON 文件 */
     private fun onRequirementEdited() {
         lastDocument?.let { doc ->
             doc.requirements = requirementTable.getRequirements()
             doc.total = doc.requirements.size
+            // 写回 JSON 文件
+            val path = reqJsonField.text.trim()
+            if (path.isNotBlank() && !path.startsWith("(") && File(path).exists()) {
+                try {
+                    val parser = RequirementParser(DiffSenseSettings.getInstance().toConfig())
+                    File(path).writeText(parser.toJson(doc), Charsets.UTF_8)
+                    jsonPathLabel.text = "JSON：${File(path).name}（已更新）"
+                } catch (e: Exception) {
+                    log.warn("写回 JSON 失败：${e.message}")
+                }
+            }
         }
     }
 
@@ -334,34 +340,6 @@ class DiffSenseToolWindowPanel(
                 }
             }
         })
-    }
-
-    /** 问题 3b：从当前选中的 JSON 文件重新加载需求列表（编辑器里手改 JSON 后点此刷新） */
-    private fun reloadFromJson() {
-        val path = reqJsonField.text.trim()
-        if (path.isBlank() || path.startsWith("(")) {
-            Messages.showWarningDialog(project, "请先在「需求 JSON」字段选择一个 JSON 文件", "缺少文件")
-            return
-        }
-        val jsonFile = File(path)
-        if (!jsonFile.exists()) {
-            Messages.showWarningDialog(project, "文件不存在：$path", "错误")
-            return
-        }
-        try {
-            val json = jsonFile.readText(Charsets.UTF_8)
-            val parser = RequirementParser(DiffSenseSettings.getInstance().toConfig())
-            val doc = parser.fromJson(json)
-            lastDocument = doc
-            requirementTable.showRequirements(doc.requirements)
-            jsonPathLabel.text = "JSON：${jsonFile.name}"
-            refreshToken()
-            logPanel.appendLine("↻ 已从 JSON 重新加载：${jsonFile.name}（${doc.total} 条需求）")
-            Messages.showInfoMessage(project, "已加载 ${doc.total} 条需求", "刷新成功")
-        } catch (e: Exception) {
-            log.warn("从 JSON 加载失败: ${e.message}")
-            Messages.showErrorDialog(project, e.message ?: "解析失败", "加载失败")
-        }
     }
 
     // ==================== 扫描 Tab 动作 ====================
