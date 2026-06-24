@@ -154,13 +154,15 @@ class RequirementParser(
     }
 
     /**
-     * 解析 LLM 返回的 JSON 数组（带容错）
+     * 解析 LLM 返回的 JSON 数组（三层容错）
      *
      * 容错策略：
-     *   1. 剥离 markdown 代码块包裹（```json ... ```）
-     *   2. 截取第一个 [ 到最后一个 ] 的范围
-     *   3. 尝试修复尾部截断（缺少 ] 时自动补全）
-     *   4. 解析失败记录原始响应前 500 字符到日志，便于排查
+     *   第一层：extractJsonArray 定位顶层数组并判定是否截断（括号深度计数）
+     *   第二层：repairTruncatedJson 修复尾部截断（跳过外层 [ 做深度计数）
+     *   第三层：parseObjectsIndividually 逐对象兜底（整体解析失败时降级）
+     *
+     * 一旦整体解析失败，不再直接返回空列表，而是降级到第三层逐对象解析，
+     * 尽可能保住能解析的需求条目。
      */
     private fun parseRequirementsJson(
         content: String,
@@ -168,13 +170,15 @@ class RequirementParser(
         context: String = "",
     ): List<Requirement> {
         val json = extractJsonArray(content, onProgress, context) ?: return emptyList()
+
+        // 先尝试整体解析（最常见路径，性能最好）
         return try {
             val type = object : TypeToken<List<Requirement>>() {}.type
             gson.fromJson(json, type) ?: emptyList()
         } catch (e: Exception) {
-            log.warn("JSON 解析失败 [$context]：${e.message}，原始（前500字）：${content.take(500)}")
-            onProgress?.invoke("⚠ [$context] JSON 解析失败：${e.message}，已记录到日志")
-            emptyList()
+            log.warn("JSON 整体解析失败 [$context]：${e.message}，降级到逐对象兜底，原始（前500字）：${content.take(500)}")
+            // 第三层：整体失败，逐对象兜底
+            parseObjectsIndividually(json, onProgress, context)
         }
     }
 
@@ -230,18 +234,126 @@ class RequirementParser(
      * 修复截断的 JSON 数组
      *
      * 策略：找到最后一个完整对象的 `}`，在其后补 `]`。
+     *
+     * 关键 bug 修复（v5）：
+     *   旧实现用 lastIndexOf('}') 定位最后一个 }，但 description 字符串值内部可能含 }（如
+     *   "function(){ return {}; }"），导致截断位置错误。
+     *   改用括号深度计数。但若从 partial 开头（外层 [）算，[ 让 depth=1，内部每个对象的 }
+     *   闭合时 depth 只能回到 1，永远到不了 0，于是 lastCompleteEnd 始终是 -1，修复逻辑
+     *   形同虚设——这正是 Unterminated object 报错的根因。
+     *
+     *   解决：跳过外层 [，从数组内部（arrStart + 1）开始扫描，这样每个顶层对象的 } 闭合时
+     *   depth 能正确归零，才能正确记录最后一个完整对象的位置。
      */
     private fun repairTruncatedJson(
         partial: String,
         onProgress: ((String) -> Unit)? = null,
         context: String = "",
     ): String {
-        val lastCompleteBrace = partial.lastIndexOf('}')
-        if (lastCompleteBrace < 0) return partial
-        val repaired = partial.substring(0, lastCompleteBrace + 1) + "]"
-        onProgress?.invoke("ℹ [$context] JSON 尾部截断，已尝试修复")
+        val arrStart = partial.indexOf('[')
+        if (arrStart < 0) return partial
+
+        // 跳过外层 [，从数组内部开始扫描
+        val scanStart = arrStart + 1
+        var depth = 0
+        var inString = false
+        var escape = false
+        var lastCompleteEnd = -1  // 最后一个完整顶层对象的 } 位置（相对 partial）
+
+        for (i in scanStart until partial.length) {
+            val c = partial[i]
+            if (escape) { escape = false; continue }
+            if (c == '\\') { escape = true; continue }
+            if (c == '"') { inString = !inString; continue }
+            if (inString) continue
+            when (c) {
+                '{' -> depth++
+                '}' -> {
+                    depth--
+                    // depth 归零 = 一个顶层对象完整闭合
+                    if (depth == 0) {
+                        lastCompleteEnd = i
+                    }
+                }
+            }
+        }
+
+        if (lastCompleteEnd < 0) {
+            // 没有任何完整对象，返回空数组
+            onProgress?.invoke("⚠ [$context] JSON 截断且无完整对象可保留")
+            return "[]"
+        }
+
+        val repaired = partial.substring(0, lastCompleteEnd + 1) + "]"
+        onProgress?.invoke("ℹ [$context] JSON 尾部截断，已尝试修复（保留到最后一个完整对象）")
         log.info("[$context] JSON 修复：原始长度=${partial.length}，修复后=${repaired.length}")
         return repaired
+    }
+
+    /**
+     * 逐对象兜底解析（第三层容错）
+     *
+     * 场景：修复后的 JSON 整体解析仍失败（某个对象字段值含非法字符，如未转义引号）。
+     * 这时整体 Gson fromJson 会抛异常，所有条目丢失。
+     *
+     * 新逻辑：切出每个顶层 {...} 对象单独 fromJson，跳过损坏的，保住能解析的。
+     * 同样用括号深度计数定位每个对象的边界，跳过字符串内部括号。
+     */
+    private fun parseObjectsIndividually(
+        json: String,
+        onProgress: ((String) -> Unit)? = null,
+        context: String = "",
+    ): List<Requirement> {
+        val arrStart = json.indexOf('[')
+        if (arrStart < 0) return emptyList()
+
+        val objects = mutableListOf<String>()
+        val scanStart = arrStart + 1  // 跳过外层 [
+        var depth = 0
+        var inString = false
+        var escape = false
+        var objStart = -1  // 当前对象起始 { 位置
+
+        for (i in scanStart until json.length) {
+            val c = json[i]
+            if (escape) { escape = false; continue }
+            if (c == '\\') { escape = true; continue }
+            if (c == '"') { inString = !inString; continue }
+            if (inString) continue
+            when (c) {
+                '{' -> {
+                    if (depth == 0) objStart = i  // 顶层对象开始
+                    depth++
+                }
+                '}' -> {
+                    depth--
+                    if (depth == 0 && objStart >= 0) {
+                        // 一个顶层对象完整闭合
+                        objects.add(json.substring(objStart, i + 1))
+                        objStart = -1
+                    }
+                }
+            }
+        }
+
+        if (objects.isEmpty()) return emptyList()
+
+        val results = mutableListOf<Requirement>()
+        var skipped = 0
+        for (obj in objects) {
+            try {
+                val req = gson.fromJson(obj, Requirement::class.java)
+                if (req != null) results.add(req)
+            } catch (e: Exception) {
+                skipped++
+            }
+        }
+
+        if (skipped > 0) {
+            onProgress?.invoke("⚠ [$context] 逐对象兜底：成功 ${results.size} 条，跳过损坏 $skipped 条")
+            log.warn("[$context] parseObjectsIndividually：$skipped/${objects.size} 个对象解析失败被跳过")
+        }
+        return results
     }
 
     /** 将 RequirementDocument 序列化为 JSON 字符串 */
