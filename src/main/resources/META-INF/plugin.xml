@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  DiffSense · AI 需求覆盖度审查插件
+  AI DiffSense · AI 需求覆盖度 & 代码质量审查插件
   =====================================
   功能：
     1. ToolWindow  —— 常驻右侧工具窗（需求拆解 / 扫描 / 日志 三 Tab）
@@ -9,24 +9,30 @@
 -->
 <idea-plugin>
     <id>com.diffsense.intellij</id>
-    <name>DiffSense</name>
-    <vendor email="Liu_jiam@163.com" url="https://gitee.com/jiaming-pot/diffsense-jm">DiffSense</vendor>
+    <name>AI DiffSense</name>
+    <vendor email="Liu_jiam@163.com" url="https://gitee.com/jiaming-pot/diffsense-jm">AI DiffSense</vendor>
 
     <!-- 明确兼容范围：2023.1 (231) ~ 2025.2 (252) -->
     <idea-version since-build="231" until-build="252.*"/>
 
     <description><![CDATA[
-        <h2>DiffSense · AI 需求覆盖度审查</h2>
+        <h2>AI DiffSense · AI 需求覆盖度 & 代码质量审查</h2>
         <p>让每一行代码改动，都有需求可循。</p>
         <ul>
             <li>📋 分割需求：从需求文档自动拆解成结构化需求条目</li>
             <li>🔍 扫描代码：判断代码改动对需求的覆盖情况</li>
+            <li>🐞 代码质量：扫描 diff 中的潜在 bug / 代码异味 / 安全风险</li>
             <li>🪝 Pre-commit：提交前自动检查未覆盖需求</li>
             <li>🎨 Tool Window：历史报告与需求库管理</li>
         </ul>
     ]]></description>
 
     <change-notes><![CDATA[
+        <em>0.8.0</em><br/>
+        - 插件更名为「AI DiffSense」<br/>
+        - 新增代码质量扫描：扫描 diff 中的潜在 bug / 代码异味 / 安全风险 / 性能问题<br/>
+        - 新增质量扫描开关（Settings 与扫描窗口均可配置）<br/>
+        - 提示词（Prompt）可在 Settings 中自定义，支持一键重置为默认值<br/>
         <em>0.7.0</em><br/>
         - 需求列表描述列支持多行渲染与单元格内滚动，超长内容可上下滑动<br/>
         - 启用列表头新增「全部启用 / 全部禁用」一键操作按钮<br/>
@@ -67,10 +73,10 @@
     <extensions defaultExtensionNs="com.intellij">
 
         <!-- ==================== 配置入口 ==================== -->
-        <!-- Settings → Tools → DiffSense -->
+        <!-- Settings → Tools → AI DiffSense -->
         <applicationConfigurable
             id="diffsense.settings"
-            displayName="DiffSense"
+            displayName="AI DiffSense"
             groupId="tools"
             implementation="com.diffsense.settings.DiffSenseSettingsConfigurable"/>
 

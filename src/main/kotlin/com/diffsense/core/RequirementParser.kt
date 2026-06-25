@@ -105,7 +105,7 @@ class RequirementParser(
                         indicator?.checkCanceled()
                         val userMsg = buildUserMessage(slice.section, slice.subSection, slice.body)
                         onProgress?.invoke("→ [${index + 1}/$total] 拆解：${slice.section} / ${slice.subSection}")
-                        val content = llm.chat(Prompts.parseSystemPrompt, userMsg, indicator)
+                        val content = llm.chat(config.parsePrompt, userMsg, indicator)
                         val reqs = parseRequirementsJson(content, onProgress, "${slice.section}/${slice.subSection}")
                         // 改动 7b（v4）：回填 source，记录需求来自文档的哪个板块/子板块
                         val sourcePath = if (slice.subSection.isNotBlank()) "${slice.section} / ${slice.subSection}" else slice.section

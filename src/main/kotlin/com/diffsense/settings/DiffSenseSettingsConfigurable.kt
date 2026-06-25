@@ -16,7 +16,7 @@ class DiffSenseSettingsConfigurable : SearchableConfigurable {
 
     override fun getId(): String = "diffsense.settings"
 
-    override fun getDisplayName(): String = "DiffSense"
+    override fun getDisplayName(): String = "AI DiffSense"
 
     override fun createComponent(): JComponent? {
         if (panel == null) {

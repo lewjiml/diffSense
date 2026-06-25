@@ -1,16 +1,17 @@
 package com.diffsense.settings
 
 import com.diffsense.core.DiffSenseConfig
+import com.diffsense.core.Prompts
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 
 /**
- * DiffSense 全局设置（持久化）
+ * AI DiffSense 全局设置（持久化）
  *
  * 存储位置：IDE 的 config 目录下 diffsense-settings.xml
- * 通过 Settings → Tools → DiffSense 面板修改。
+ * 通过 Settings → Tools → AI DiffSense 面板修改。
  *
  * 注意：API Key 可以存在这里（本地加密存储），
  * 但推荐通过环境变量 AI_API_KEY 注入，更安全。
@@ -40,6 +41,21 @@ class DiffSenseSettings : PersistentStateComponent<DiffSenseSettings.State> {
         var parseConcurrency: Int = 3,
         /** 单次请求最大 token（默认 8192；输出被截断时调大） */
         var maxTokens: Int = 8192,
+
+        // ---- v0.8.0 新增：提示词可配置 ----
+        /** 需求拆解系统提示词（默认值 = Prompts.parseSystemPrompt） */
+        var parsePrompt: String = Prompts.parseSystemPrompt,
+        /** 覆盖度扫描系统提示词（默认值 = Prompts.scanSystemPrompt） */
+        var scanPrompt: String = Prompts.scanSystemPrompt,
+        /** 代码质量扫描系统提示词（默认值 = Prompts.qualitySystemPrompt） */
+        var qualityPrompt: String = Prompts.qualitySystemPrompt,
+
+        // ---- v0.8.0 新增：代码质量扫描开关 ----
+        /**
+         * 是否启用代码质量扫描（默认 true）
+         * Settings 面板和扫描窗口都能切换这个开关，两者读写同一个持久化值。
+         */
+        var qualityScanEnabled: Boolean = true,
     )
 
     private var state = State()
@@ -63,6 +79,10 @@ class DiffSenseSettings : PersistentStateComponent<DiffSenseSettings.State> {
             timeoutMs = state.timeoutSec * 1000,
             parseConcurrency = state.parseConcurrency.coerceAtLeast(1),
             maxTokens = state.maxTokens.coerceAtLeast(1024),
+            parsePrompt = state.parsePrompt,
+            scanPrompt = state.scanPrompt,
+            qualityPrompt = state.qualityPrompt,
+            qualityScanEnabled = state.qualityScanEnabled,
         )
     }
 

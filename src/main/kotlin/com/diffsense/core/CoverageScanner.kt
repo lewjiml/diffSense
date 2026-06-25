@@ -55,7 +55,7 @@ class CoverageScanner(
         onProgress?.invoke("• 组装提示词，包含需求列表与 git diff...")
         val userMsg = buildScanMessage(requirements, diff)
         onProgress?.invoke("• 调用 LLM（${config.model}）...")
-        val content = llm.chat(Prompts.scanSystemPrompt, userMsg, indicator)
+        val content = llm.chat(config.scanPrompt, userMsg, indicator)
         onProgress?.invoke("• LLM 返回 ${content.length} 字符，解析中...")
 
         val results = parseCoverageJson(content, requirements)

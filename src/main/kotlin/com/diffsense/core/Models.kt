@@ -91,3 +91,71 @@ data class ScanReport(
         var coverageRate: Double,
     )
 }
+
+// ============================================================================
+// v0.8.0 新增：代码质量扫描数据模型
+// ============================================================================
+
+/**
+ * 单条代码质量问题（由 QualityScanner 输出）
+ *
+ * 对应 Prompts.qualitySystemPrompt 中定义的输出格式。
+ */
+data class QualityIssue(
+    /** 严重度：high / medium / low */
+    val severity: String,
+    /** 问题类别：bug / smell / security / performance */
+    val category: String,
+    /** 文件路径 */
+    val file: String,
+    /** 位置提示（方法名 / 行号附近） */
+    val lineHint: String,
+    /** 问题描述：为什么是问题、会引发什么后果 */
+    val description: String,
+    /** 修复建议（可执行的方向） */
+    val suggestion: String,
+) {
+    /** 用于 UI 展示的严重度文本 */
+    fun severityText(): String = when (severity) {
+        "high" -> "🔴 高"
+        "medium" -> "🟡 中"
+        "low" -> "🟢 低"
+        else -> severity
+    }
+
+    /** 用于 UI 展示的类别文本 */
+    fun categoryText(): String = when (category) {
+        "bug" -> "🐞 缺陷"
+        "security" -> "🔒 安全"
+        "performance" -> "⚡ 性能"
+        "smell" -> "💩 异味"
+        else -> category
+    }
+}
+
+/**
+ * 代码质量扫描汇总
+ */
+data class QualitySummary(
+    var highCount: Int = 0,
+    var mediumCount: Int = 0,
+    var lowCount: Int = 0,
+) {
+    /** 总问题数 */
+    fun total(): Int = highCount + mediumCount + lowCount
+}
+
+/**
+ * 代码质量扫描报告（一次 scan 的完整结果）
+ */
+data class QualityReport(
+    /** 发现的问题列表（按 severity 排序后：high → medium → low） */
+    val issues: List<QualityIssue>,
+    /** 汇总统计 */
+    val summary: QualitySummary,
+) {
+    companion object {
+        /** 空报告（无问题或未启用扫描时使用） */
+        fun empty(): QualityReport = QualityReport(emptyList(), QualitySummary())
+    }
+}

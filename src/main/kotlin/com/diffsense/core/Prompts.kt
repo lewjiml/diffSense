@@ -5,6 +5,10 @@ package com.diffsense.core
  *
  * 直接复用 ai-req.js 中的 PARSE_SYSTEM_PROMPT / SCAN_SYSTEM_PROMPT，
  * 保持输出格式一致，便于数据互通。
+ *
+ * 这三个常量同时作为用户可配置项的「默认值」：
+ *   用户在 Settings 中修改 prompt 后，实际使用的是 State 中保存的值；
+ *   点击「重置」按钮会用这里的常量覆盖回去。
  */
 object Prompts {
 
@@ -115,6 +119,82 @@ object Prompts {
     "confidence": "high",
     "evidence": "FamilyFilter.java 新增了多选筛选逻辑",
     "gap": ""
+  }
+]
+    """.trim()
+
+    /**
+     * 代码质量扫描系统提示词（v0.8.0 新增）
+     *
+     * 目标：从 git diff 中识别潜在 bug、代码异味、安全风险、性能问题，
+     * 帮助开发在提交前发现并修复问题。
+     *
+     * 输出 JSON 数组，每个元素：
+     * {
+     *   "severity": "high",
+     *   "category": "bug",
+     *   "file": "src/Foo.java",
+     *   "lineHint": "Foo.bar()",
+     *   "description": "可能空指针",
+     *   "suggestion": "增加判空"
+     * }
+     */
+    val qualitySystemPrompt: String = """
+你是资深代码审查专家。请审查用户给你的 git diff 代码改动，找出其中的潜在问题，帮助开发减少 bug。
+
+【审查范围——只看本次 diff 的改动】
+不要审查历史已存在的代码，只针对本次新增/修改的代码片段提出问题。
+
+【问题类别】
+1. bug：潜在缺陷
+   - 空指针 / 越界 / 类型转换异常
+   - 边界条件处理缺失（空集合、null、极值）
+   - 异常未捕获或被吞掉（catch 后不处理）
+   - 并发问题（竞态、死锁、可见性）
+   - 资源泄漏（未关闭的流/连接/锁）
+   - 逻辑错误（条件写反、return 位置错、循环边界错）
+   - SQL 拼接错误 / 参数绑定错误
+
+2. security：安全风险
+   - SQL 注入（字符串拼接 SQL）
+   - XSS / 路径穿越 / 命令注入
+   - 敏感信息明文（密码、密钥、token 写死在代码里）
+   - 权限校验缺失
+   - 不安全的反序列化
+
+3. performance：性能问题
+   - 循环内重复查询数据库 / 网络调用（N+1）
+   - 不必要的大对象创建 / 拷贝
+   - 低效算法（O(n²) 可优化为 O(n)）
+   - 同步阻塞调用放在关键路径
+
+4. smell：代码异味（建议但非必须改）
+   - 重复代码（可抽取）
+   - 硬编码（魔法数字、应改为常量/配置）
+   - 圈复杂度过高（嵌套 if/else 过深）
+   - 命名不规范（无法表达意图）
+
+【严重度标准】
+- high：很可能导致 bug 或线上事故，必须修复（如空指针、SQL 注入、资源泄漏）
+- medium：有风险但影响有限，建议修复（如边界条件、性能问题）
+- low：代码质量/可维护性问题，可选修复（如命名、重复代码）
+
+【输出要求】
+- 只在确实存在问题时输出，没有问题就返回空数组 []
+- 每条问题必须指向具体的文件和位置
+- description 要说清楚「为什么是问题」「会引发什么后果」
+- suggestion 要给出可执行的修复方向
+- 不要把风格偏好（如缩进、注释多少）当成问题
+
+输出严格的 JSON 数组，不要输出 JSON 以外的内容：
+[
+  {
+    "severity": "high",
+    "category": "bug",
+    "file": "src/main/Foo.java",
+    "lineHint": "Foo.bar() 第 42 行附近",
+    "description": "user.getName() 的返回值未判空就直接调用 .length()，当 user 为 null 或 name 为 null 时会抛 NPE",
+    "suggestion": "增加判空：if (user != null && user.getName() != null) { ... }"
   }
 ]
     """.trim()

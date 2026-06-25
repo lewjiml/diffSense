@@ -3,12 +3,12 @@ package com.diffsense.core
 /**
  * Token 消耗统计（单例）
  *
- * 按 parse / scan 两个阶段分别统计调用次数和 token 消耗。
+ * 按 parse / scan / quality 三个阶段分别统计调用次数和 token 消耗。
  * 对应 ai-req.js 中的 tokenStats。
  */
 object TokenStats {
 
-    enum class Stage { PARSE, SCAN }
+    enum class Stage { PARSE, SCAN, QUALITY }
 
     data class StageData(
         var calls: Int = 0,
@@ -19,11 +19,16 @@ object TokenStats {
 
     private val parseData = StageData()
     private val scanData = StageData()
+    private val qualityData = StageData()
 
     /** 记录一次 LLM 调用的 token 用量 */
     fun record(stage: Stage, usage: Usage?) {
         if (usage == null) return
-        val target = if (stage == Stage.PARSE) parseData else scanData
+        val target = when (stage) {
+            Stage.PARSE -> parseData
+            Stage.SCAN -> scanData
+            Stage.QUALITY -> qualityData
+        }
         target.calls++
         target.promptTokens += usage.promptTokens
         target.completionTokens += usage.completionTokens
@@ -32,15 +37,19 @@ object TokenStats {
 
     /** 获取指定阶段的数据快照（用于 UI 显示） */
     fun snapshot(stage: Stage): StageData {
-        val src = if (stage == Stage.PARSE) parseData else scanData
+        val src = when (stage) {
+            Stage.PARSE -> parseData
+            Stage.SCAN -> scanData
+            Stage.QUALITY -> qualityData
+        }
         return src.copy()
     }
 
     /** 合计 token 数 */
-    fun totalTokens(): Int = parseData.totalTokens + scanData.totalTokens
+    fun totalTokens(): Int = parseData.totalTokens + scanData.totalTokens + qualityData.totalTokens
 
     /** 合计调用次数 */
-    fun totalCalls(): Int = parseData.calls + scanData.calls
+    fun totalCalls(): Int = parseData.calls + scanData.calls + qualityData.calls
 
     /** 重置所有统计（新一轮分析前调用） */
     fun reset() {
@@ -52,6 +61,10 @@ object TokenStats {
         scanData.promptTokens = 0
         scanData.completionTokens = 0
         scanData.totalTokens = 0
+        qualityData.calls = 0
+        qualityData.promptTokens = 0
+        qualityData.completionTokens = 0
+        qualityData.totalTokens = 0
     }
 
     /** 生成可读的报告字符串 */
@@ -68,11 +81,12 @@ object TokenStats {
         sb.append("合计token".padStart(11)).append('\n')
         appendRow(sb, "parse(需求拆解)", parseData)
         appendRow(sb, "scan(覆盖扫描)", scanData)
+        appendRow(sb, "quality(质量)", qualityData)
         val total = StageData(
-            calls = parseData.calls + scanData.calls,
-            promptTokens = parseData.promptTokens + scanData.promptTokens,
-            completionTokens = parseData.completionTokens + scanData.completionTokens,
-            totalTokens = parseData.totalTokens + scanData.totalTokens,
+            calls = parseData.calls + scanData.calls + qualityData.calls,
+            promptTokens = parseData.promptTokens + scanData.promptTokens + qualityData.promptTokens,
+            completionTokens = parseData.completionTokens + scanData.completionTokens + qualityData.completionTokens,
+            totalTokens = parseData.totalTokens + scanData.totalTokens + qualityData.totalTokens,
         )
         appendRow(sb, "合计", total)
         sb.append(bar)

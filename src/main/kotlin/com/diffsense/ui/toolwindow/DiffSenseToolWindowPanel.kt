@@ -4,6 +4,7 @@ import com.diffsense.core.*
 import com.diffsense.icons.DiffSenseIcons
 import com.diffsense.settings.DiffSenseSettings
 import com.diffsense.ui.CoverageResultTable
+import com.diffsense.ui.QualityResultTable
 import com.diffsense.ui.RequirementTable
 import com.diffsense.ui.ScanLogPanel
 import com.intellij.openapi.application.ApplicationManager
@@ -16,6 +17,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.TextFieldWithBrowseButton
 import com.intellij.ui.JBColor
+import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTabbedPane
@@ -31,11 +33,12 @@ import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.JTabbedPane
+import javax.swing.ScrollPaneConstants
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 
 /**
- * DiffSense Tool Window 内容面板（三 Tab）
+ * AI DiffSense Tool Window 内容面板（三 Tab）
  *
  * 三个 Tab：
  *   1. 需求 Tab —— 选 MD 文档 → 板块过滤 → 拆解需求 → 可编辑需求表格（3 列 + 详情）
@@ -60,6 +63,10 @@ class DiffSenseToolWindowPanel(
 
     @Volatile
     internal var lastReport: ScanReport? = null
+
+    /** v0.8.0：最近一次代码质量扫描报告 */
+    @Volatile
+    internal var lastQualityReport: QualityReport? = null
 
     // ==================== 需求 Tab 组件 ====================
     private val reqDocField = TextFieldWithBrowseButton().apply {
@@ -122,6 +129,16 @@ class DiffSenseToolWindowPanel(
     private val resultTable = CoverageResultTable()
     private val summaryLabel = JBLabel("暂无扫描结果")
 
+    // ---- v0.8.0 新增：代码质量扫描 ----
+    /** 扫描窗口的质量开关（与 Settings 面板共享同一个持久化值） */
+    private val qualityScanCheck = JBCheckBox("同时扫描代码质量（bug / 安全 / 性能 / 异味）", true).apply {
+        toolTipText = "与 Settings → AI DiffSense 中的开关共享同一个配置"
+    }
+    private val qualityResultTable = QualityResultTable()
+    private val qualitySummaryLabel = JBLabel(" ").apply {
+        foreground = JBColor.gray
+    }
+
     // ==================== 日志 Tab 组件 ====================
     private val logPanel = ScanLogPanel()
 
@@ -129,6 +146,12 @@ class DiffSenseToolWindowPanel(
     private val tokenLabel = JBLabel("💰 Token：parse 0 / scan 0")
 
     init {
+        // v0.8.0：质量扫描开关从持久化配置加载，勾选状态双向同步到 Settings
+        qualityScanCheck.isSelected = DiffSenseSettings.getInstance().state.qualityScanEnabled
+        qualityScanCheck.addActionListener {
+            DiffSenseSettings.getInstance().state.qualityScanEnabled = qualityScanCheck.isSelected
+        }
+
         val tabs = JBTabbedPane().apply {
             tabPlacement = JTabbedPane.TOP
         }
@@ -206,6 +229,8 @@ class DiffSenseToolWindowPanel(
                     border = BorderFactory.createLineBorder(JBColor.border())
                 }
             )
+            // v0.8.0：代码质量扫描开关（与 Settings 共享同一持久化值）
+            .addComponent(qualityScanCheck)
             .addVerticalGap(4)
             .addComponent(JPanel(FlowLayout(FlowLayout.LEFT)).apply {
                 add(JButton("▶ 开始扫描", DiffSenseIcons.SCAN).apply {
@@ -220,11 +245,21 @@ class DiffSenseToolWindowPanel(
                 foreground = JBColor.gray
             })
             .addComponentFillVertically(resultTable.getComponent(), 0)
+            // v0.8.0：代码质量扫描结果区
+            .addSeparator()
+            .addComponent(JBLabel("代码质量问题").apply {
+                border = BorderFactory.createEmptyBorder(2, 0, 2, 0)
+            })
+            .addComponent(qualitySummaryLabel)
+            .addComponent(qualityResultTable.getComponent())
             .panel
 
         return JPanel(BorderLayout()).apply {
             border = JBUI.Borders.empty(8)
-            add(form, BorderLayout.CENTER)
+            add(JBScrollPane(form).apply {
+                border = BorderFactory.createEmptyBorder()
+                verticalScrollBarPolicy = ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED
+            }, BorderLayout.CENTER)
         }
     }
 
@@ -353,7 +388,7 @@ class DiffSenseToolWindowPanel(
         if (config.apiKey.isBlank()) {
             Messages.showWarningDialog(
                 project,
-                "请先在 Settings → Tools → DiffSense 中配置 API Key",
+                "请先在 Settings → Tools → AI DiffSense 中配置 API Key",
                 "缺少 API Key"
             )
             return
@@ -376,7 +411,7 @@ class DiffSenseToolWindowPanel(
         val sectionKeywords = parseSectionKeywords()
         val md = mdFile.readText(Charsets.UTF_8)
 
-        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "DiffSense 拆解并保存需求", true) {
+        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "AI DiffSense 拆解并保存需求", true) {
             override fun run(indicator: ProgressIndicator) {
                 try {
                     logPanel.appendLine("开始拆解需求：${mdFile.name}，板块过滤=${sectionKeywords.ifEmpty { listOf("全部") }}")
@@ -437,7 +472,7 @@ class DiffSenseToolWindowPanel(
         if (config.apiKey.isBlank()) {
             Messages.showWarningDialog(
                 project,
-                "请先在 Settings → Tools → DiffSense 中配置 API Key",
+                "请先在 Settings → Tools → AI DiffSense 中配置 API Key",
                 "缺少 API Key"
             )
             return
@@ -454,9 +489,14 @@ class DiffSenseToolWindowPanel(
             .filter { it.isNotEmpty() }
 
         resultTable.clear()
+        qualityResultTable.clear()
+        qualitySummaryLabel.text = " "
         // 改进 11：不再 reset，累计统计
 
-        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "DiffSense 扫描覆盖度", true) {
+        // v0.8.0：读取质量扫描开关（扫描窗口的勾选状态已在 init/actionListener 中同步到 Settings）
+        val runQuality = qualityScanCheck.isSelected
+
+        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "AI DiffSense 扫描", true) {
             override fun run(indicator: ProgressIndicator) {
                 try {
                     logPanel.appendLine("开始扫描：需求 ${doc.requirements.size} 条，git diff HEAD（排除 ${excludePaths.size} 条路径）")
@@ -482,6 +522,22 @@ class DiffSenseToolWindowPanel(
                         onProgress = { line -> logPanel.appendLine(line) },
                     )
                     lastReport = report
+
+                    // v0.8.0：代码质量扫描（可选）
+                    var qualityReport: QualityReport? = null
+                    if (runQuality) {
+                        logPanel.appendLine("── 代码质量扫描 ──")
+                        val qScanner = QualityScanner(config, indicator)
+                        qualityReport = qScanner.scan(
+                            diff = diff,
+                            onProgress = { line -> logPanel.appendLine(line) },
+                        )
+                        lastQualityReport = qualityReport
+                    } else {
+                        lastQualityReport = null
+                        logPanel.appendLine("ℹ 已跳过代码质量扫描（开关未开启）")
+                    }
+
                     logPanel.appendLine(TokenStats.report())
 
                     ApplicationManager.getApplication().invokeLater {
@@ -492,6 +548,20 @@ class DiffSenseToolWindowPanel(
                         summaryLabel.foreground = if (s.coverageRate >= 0.8) JBColor(0x2E7D32, 0x66BB6A)
                         else if (s.coverageRate >= 0.5) JBColor(0xF57F17, 0xFFA726)
                         else JBColor(0xC62828, 0xEF5350)
+
+                        // v0.8.0：刷新质量扫描结果
+                        if (runQuality && qualityReport != null) {
+                            qualityResultTable.showReport(qualityReport)
+                            val qs = qualityReport.summary
+                            qualitySummaryLabel.text = "共 ${qs.total()} 条问题（🔴 高 ${qs.highCount} / 🟡 中 ${qs.mediumCount} / 🟢 低 ${qs.lowCount}）"
+                            qualitySummaryLabel.foreground = if (qs.highCount > 0) JBColor(0xC62828, 0xEF5350)
+                            else if (qs.mediumCount > 0) JBColor(0xF57F17, 0xFFA726)
+                            else JBColor.gray
+                        } else {
+                            qualityResultTable.clear()
+                            qualitySummaryLabel.text = "未启用代码质量扫描"
+                        }
+
                         refreshToken()
                     }
                 } catch (e: Exception) {
@@ -534,14 +604,15 @@ class DiffSenseToolWindowPanel(
     // ==================== 工具方法 ====================
     private fun refreshToken() {
         tokenLabel.text = "💰 Token：parse ${TokenStats.snapshot(TokenStats.Stage.PARSE).totalTokens} / " +
-            "scan ${TokenStats.snapshot(TokenStats.Stage.SCAN).totalTokens}"
+            "scan ${TokenStats.snapshot(TokenStats.Stage.SCAN).totalTokens} / " +
+            "quality ${TokenStats.snapshot(TokenStats.Stage.QUALITY).totalTokens}"
     }
 
     /** 把报告渲染为 Markdown */
     private fun renderMarkdown(report: ScanReport, doc: RequirementDocument?): String {
         val titleById = doc?.requirements?.associateBy { it.id } ?: emptyMap()
         val sb = StringBuilder()
-        sb.appendLine("# DiffSense 覆盖度报告")
+        sb.appendLine("# AI DiffSense 覆盖度报告")
         sb.appendLine()
         sb.appendLine("- 模块：${report.module}")
         sb.appendLine("- diff：git diff HEAD")
@@ -556,6 +627,23 @@ class DiffSenseToolWindowPanel(
             val title = titleById[r.id]?.title ?: ""
             sb.appendLine("| ${r.id} | $title | ${r.statusText()} | ${r.confidence} | ${r.evidence} | ${r.gap} |")
         }
+
+        // v0.8.0：代码质量问题
+        val qReport = lastQualityReport
+        if (qReport != null && qReport.issues.isNotEmpty()) {
+            sb.appendLine()
+            sb.appendLine("## 代码质量问题")
+            sb.appendLine()
+            val qs = qReport.summary
+            sb.appendLine("- 共 ${qs.total()} 条（高 ${qs.highCount} / 中 ${qs.mediumCount} / 低 ${qs.lowCount}）")
+            sb.appendLine()
+            sb.appendLine("| 严重度 | 类别 | 文件 | 描述 | 建议 |")
+            sb.appendLine("|--------|------|------|------|------|")
+            qReport.issues.forEach { issue ->
+                sb.appendLine("| ${issue.severityText()} | ${issue.categoryText()} | ${issue.file} ${issue.lineHint} | ${issue.description} | ${issue.suggestion} |")
+            }
+        }
+
         sb.appendLine()
         sb.appendLine("```")
         sb.appendLine(TokenStats.report())
