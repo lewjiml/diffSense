@@ -61,6 +61,10 @@ class DiffSenseCheckinHandler(
      *   2. findRequirementsJson 优先读 Tool Window 中用户选择的 JSON 路径
      *   3. collectStagedDiff 前后增加诊断日志
      *   4. collectStagedDiff 已改为多仓库聚合
+     *
+     * v0.9.1 修复：
+     *   不再用 git diff --cached（IDEA changelist ≠ git staged，会扫到旧版本），
+     *   改用 panel.includedChanges 获取用户实际勾选的文件，按文件路径取 diff。
      */
     override fun beforeCheckin(
         executor: com.intellij.openapi.vcs.changes.CommitExecutor?,
@@ -101,15 +105,19 @@ class DiffSenseCheckinHandler(
         try {
             val config = settings.toConfig()
 
-            service.appendLog("[pre-commit] • 正在收集暂存区 diff...")
-            val diff = DiffCollector.collectStagedDiff(project) { line ->
-                service.appendLog(line)
-            }
+            service.appendLog("[pre-commit] • 正在收集勾选文件的 diff...")
+            // v0.9.1：用 panel.includedChanges 获取用户实际勾选的文件，
+            // 而非 git diff --cached（后者可能看到的是上次 git add 的旧版本）
+            val diff = DiffCollector.collectDiffForPaths(
+                project = project,
+                changes = panel.selectedChanges,
+                onProgress = { line -> service.appendLog(line) },
+            )
             if (diff.isBlank()) {
-                service.appendLog("[pre-commit] ⏭ 暂存区无改动，放行提交")
+                service.appendLog("[pre-commit] ⏭ 勾选文件无 staged diff，放行提交")
                 return CheckinHandler.ReturnResult.COMMIT
             }
-            service.appendLog("[pre-commit] • 已收集 staged diff：${diff.length} 字符")
+            service.appendLog("[pre-commit] • 已收集 diff：${diff.length} 字符")
 
             val json = reqFile.readText(Charsets.UTF_8)
             val parser = RequirementParser(config)

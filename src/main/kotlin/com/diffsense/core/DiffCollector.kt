@@ -133,6 +133,88 @@ object DiffCollector {
     }
 
     /**
+     * 按用户在 commit 对话框中实际勾选的文件路径收集 diff
+     *
+     * v0.9.1 修复：IDEA changelist ≠ git staged。
+     * `git diff --cached` 只看 git index，但用户在 IDEA commit 对话框中勾选的文件
+     * 可能尚未 `git add`，导致扫描到的是旧版本。
+     *
+     * 本方法接收 [Change] 集合，从中提取文件路径，对每个仓库分别取这些文件的
+     * `git diff --cached <path>`，确保只扫描用户实际要提交的文件。
+     *
+     * @param project     当前项目
+     * @param changes     CheckinProjectPanel.includedChanges（用户勾选的文件列表）
+     * @param onProgress  进度日志回调（可选）
+     * @return 聚合后的 diff 文本；若无改动返回空串
+     */
+    fun collectDiffForPaths(
+        project: Project,
+        changes: Collection<com.intellij.openapi.vcs.changes.Change>,
+        onProgress: ((String) -> Unit)? = null,
+    ): String {
+        if (changes.isEmpty()) {
+            onProgress?.invoke("[pre-commit] ⏭ 用户未勾选任何文件")
+            return ""
+        }
+
+        val repos = GitUtil.getRepositories(project)
+        if (repos.isEmpty()) {
+            log.warn("[paths] 未找到任何 Git 仓库")
+            onProgress?.invoke("⚠ [pre-commit] 未找到任何 Git 仓库")
+            return ""
+        }
+
+        // 从 Change 集合中提取文件相对路径，并按仓库分组
+        // Change.afterRevision = 修改/新增后的版本；Change.beforeRevision = 修改前的版本（删除时只有 beforeRevision）
+        val repoToPaths = mutableMapOf<GitRepository, MutableList<String>>()
+        var skipped = 0
+        changeLoop@ for (change in changes) {
+            val vf = (change.afterRevision ?: change.beforeRevision)?.file?.virtualFile
+            if (vf == null) { skipped++; continue@changeLoop }
+            // 找到该文件所属的仓库
+            val repo = repos.firstOrNull { vf.path.startsWith(it.root.path) }
+            if (repo == null) { skipped++; continue@changeLoop }
+            // 转为仓库相对路径
+            val relPath = vf.path.removePrefix(repo.root.path).removePrefix("/")
+            repoToPaths.getOrPut(repo) { mutableListOf() }.add(relPath)
+        }
+
+        onProgress?.invoke("[pre-commit] 发现 ${repoToPaths.size} 个仓库，${changes.size} 个勾选文件" +
+            (if (skipped > 0) "，$skipped 个文件无法定位仓库" else ""))
+
+        val sb = StringBuilder()
+        var totalFiles = 0
+        for ((repo, paths) in repoToPaths) {
+            val repoName = repoName(repo)
+            onProgress?.invoke("→ [$repoName] 取 ${paths.size} 个文件的 diff")
+            val diff = try {
+                // git diff --cached -- <path1> <path2> ...
+                val args = mutableListOf("diff", "--cached", "--")
+                args.addAll(paths)
+                runGit(repo, *args.toTypedArray())
+            } catch (e: Exception) {
+                log.warn("[paths] 仓库 $repoName diff 失败: ${e.message}")
+                onProgress?.invoke("⚠ [pre-commit] 仓库 $repoName diff 失败：${e.message}")
+                ""
+            }
+            if (diff.isBlank()) continue
+            val files = countChangedFiles(diff)
+            totalFiles += files
+            sb.append("\n")
+            sb.append("diff --repo $repoName (${files} files, included)\n")
+            sb.append(diff)
+            if (!diff.endsWith("\n")) sb.append("\n")
+        }
+
+        if (sb.isEmpty()) {
+            onProgress?.invoke("ℹ [pre-commit] 所勾选文件在暂存区无 diff（可能已是最新）")
+            return ""
+        }
+        onProgress?.invoke("✓ [pre-commit] 聚合完成：$totalFiles 个文件改动")
+        return sb.toString()
+    }
+
+    /**
      * 单仓库的 diff（问题 5a：git diff HEAD；问题 5b：pathspec 排除）
      */
     private fun collectDiffFromRepo(repo: GitRepository, excludePaths: List<String>): String {

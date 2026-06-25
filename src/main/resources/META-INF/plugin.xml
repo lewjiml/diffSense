@@ -28,7 +28,9 @@
     ]]></description>
 
     <change-notes><![CDATA[
-        <em>0.9.0</em><br/>
+        <em>1.0.0 正式版</em><br/>
+        - 🎯 首个正式发布版本，功能稳定可用<br/>
+        - 修复 Pre-commit 扫描用旧文件内容的问题：改用 panel.selectedChanges 获取用户实际勾选的文件，按路径取 staged diff，不再盲目执行 git diff --cached<br/>
         - 扫描效率优化：CoverageScanner 与 QualityScanner 并行执行<br/>
         - CoverageScanner 支持分批并发扫描，新增「覆盖度扫描并发度」配置项<br/>
         - LLMClient HttpClient 改为全局共享单例，减少 TCP/TLS 握手开销<br/>

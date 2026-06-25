@@ -4,39 +4,29 @@
 
 一个面向研发团队的 IntelliJ IDEA 插件，把「需求文档 → 结构化需求 → 代码覆盖度 + 代码质量」这条链路做成可视化、可交互、可推广的工作流。
 
-## 🆕 0.8.0 重大更新
+## � v1.0.0 正式版
 
-| 改进 | 说明 |
+| 能力 | 说明 |
 |------|------|
-| 🏷️ **品牌升级为 AI DiffSense** | 插件名 / UI 文案 / Settings 显示名统一改为「AI DiffSense」（plugin id、包名、存储文件名保持不变，平滑升级） |
-| ⚙️ **系统提示词可配置** | parse / scan / quality 三套 prompt 可在 Settings 面板直接编辑，每个文本框旁有「重置为默认」按钮一键回退到内置常量 |
-| 🛡️ **新增代码质量扫描** | 独立 `QualityScanner`，扫描 diff 中的潜在 bug / 代码异味 / 安全风险 / 性能问题，结果带严重度着色 + 修复建议 |
-| 🔀 **质量扫描双入口开关** | `qualityScanEnabled` 在 Settings 面板和扫描窗口两处都可配置，指向同一个持久化值 |
-| 📊 **Token 统计扩展** | 新增 `QUALITY` 阶段，状态栏显示 `parse / scan / quality` 三段 Token 消耗 |
-| 📝 **导出报告增强** | Markdown 报告附带代码质量问题清单（严重度 / 类别 / 文件 / 描述 / 建议） |
+| 📋 **需求拆解** | 把 Markdown 需求文档按 `##`/`###` 切片并行送 LLM，拆解成可验收的结构化条目 |
+| 🎯 **覆盖度扫描** | 对比 Git Diff 与需求，判断每条需求的覆盖状态（已覆盖 / 部分 / 未覆盖） |
+| 🛡️ **代码质量扫描** | 独立扫描 diff 中的潜在 bug / 安全风险 / 性能问题 / 代码异味，带严重度 + 修复建议 |
+| � **Pre-commit 拦截** | 提交时自动扫描勾选文件，未覆盖需求超阈值则拦截，从源头守住质量 |
+| 🪟 **Tool Window** | 右侧常驻工具窗（需求 / 扫描 / 日志 三 Tab），不阻塞 IDEA |
+| ⚡ **效率优化** | 覆盖度与质量扫描并行、分批并发、HttpClient 共享单例 |
+| ⚙️ **提示词可配置** | parse / scan / quality 三套 Prompt 可在 Settings 自定义，一键重置 |
+
+> 📌 **v1.0.0 关键修复**：Pre-commit 不再盲目执行 `git diff --cached`（IDEA changelist ≠ git staged，会扫到旧版本），改用 `panel.selectedChanges` 获取用户实际勾选的文件按路径取 diff，确保扫描的是当前要提交的版本。
 
 ---
 
-## 🆕 0.2.0 更新（历史）
-
-| 改进 | 说明 |
-|------|------|
-| 🪟 **全交互改为边栏 Tool Window** | 移除模态弹窗（向导弹窗），所有操作集中在右侧 `DiffSense` 工具窗，**不阻塞 IDEA 使用** |
-| 📑 **三 Tab 结构** | `需求 / 扫描 / 日志` 分工清晰，需求和扫描结果都在同一窗口 |
-| ✏️ **需求可编辑** | 拆解出的需求以表格呈现，标题 / 描述 / 关联词 / 验收标准**全部可直接双击编辑** |
-| ⚡ **并行拆解需求** | 需求文档按 `##` / `###` 切片后**并行**送 LLM，默认并发 3，可在 Settings 调整 |
-| � **实时扫描日志** | 解析与扫描过程**实时输出**到日志 Tab，全程可见 |
-| 🎯 **字段精简** | 需求只保留 `id / title / description / keywords / acceptanceCriteria`，移除模块 / 分支 / 优先级 / 分类 |
-
----
-
-## �🚀 快速上手（3 分钟）
+## 🚀 快速上手（3 分钟）
 
 ### 第 1 步：安装插件
 
 1. 打开 IDEA → `File` → `Settings`（Mac：`IntelliJ IDEA` → `Preferences`）
 2. 左侧选 `Plugins` → 顶部点齿轮 ⚙️ → `Install Plugin from Disk...`
-3. 选择 [`build/distributions/diffsense-idea-0.8.0.zip`](file:///e:/all-project/ai-shenhe/ai-initial-review-demo/build/distributions/diffsense-idea-0.8.0.zip)
+3. 选择 [`build/distributions/diffsense-idea-1.0.0.zip`](file:///e:/all-project/ai-shenhe/ai-initial-review-demo/build/distributions/diffsense-idea-1.0.0.zip)
 4. 重启 IDEA
 
 ### 第 2 步：配置 LLM
@@ -53,7 +43,7 @@
 
 ### 第 3 步：使用
 
-1. 右侧工具栏点 DiffSense 图标（或 `View` → `Tool Windows` → `DiffSense`）打开工具窗
+1. 右侧工具栏点 DiffSense 图标（或 `View` → `Tool Windows` → `AI DiffSense`）打开工具窗
 2. 在「需求」Tab 选需求文档 `.md` → 点 `拆解需求`
 3. 拆解完成后**可直接编辑**表格里的需求
 4. 切到「扫描」Tab → 选基线分支 → 点 `开始扫描`
@@ -106,14 +96,14 @@
 
 #### 🔍 扫描 Tab
 - 输入模块名、基线分支（默认 `develop`）
-- **🆕 代码质量扫描开关**：勾选后扫描时会额外执行一次质量检查（bug / 安全 / 性能 / 异味），与 Settings 中的开关共享同一个持久化值
+- **代码质量扫描开关**：勾选后扫描时会额外执行一次质量检查（bug / 安全 / 性能 / 异味），与 Settings 中的开关共享同一个持久化值
 - 点 `开始扫描` → 自动收集 Git Diff → 送 LLM 判断覆盖度（开启质量扫描时再追加一次质量扫描）
 - 覆盖度结果表格展示每条需求的覆盖状态：
   - ✅ 已覆盖（高置信度）
   - ⚠️ 部分覆盖（有缺口）
   - ❌ 未覆盖
 - 顶部摘要条显示覆盖率百分比，按阈值变色（绿 / 橙 / 红）
-- **🆕 代码质量问题区**：在覆盖度表格下方，4 列表格展示
+- **代码质量问题区**：在覆盖度表格下方，4 列表格展示
   - 严重度（🔴 高 / 🟡 中 / 🟢 低，着色渲染）
   - 类别（bug / security / performance / smell）
   - 文件 + 行号
@@ -139,7 +129,7 @@
 
 **打开方式**：`Ctrl+K` 提交代码时自动触发（需先在 Settings 启用）
 
-- 提交前自动扫描暂存区 diff
+- 提交前自动扫描**用户实际勾选的文件**（`panel.selectedChanges`），按文件路径取 staged diff
 - 若未覆盖需求数超过阈值，弹窗询问是否继续
 - 扫描结果和日志同步推送到 Tool Window
 
@@ -166,7 +156,7 @@
 | 启用 Pre-commit 检查 | 提交前是否扫描 | 关 |
 | 最大允许未覆盖数 | Pre-commit 拦截阈值 | `3` |
 
-**🆕 系统提示词（0.8.0 新增）**
+**系统提示词**
 
 每个 prompt 文本框旁都有「重置为默认」按钮，点击后用 `Prompts.kt` 中的内置常量覆盖。
 
@@ -176,11 +166,12 @@
 | 覆盖度扫描 Prompt（scan） | 控制覆盖度判断的 system prompt | `Prompts.scanSystemPrompt` |
 | 代码质量扫描 Prompt（quality） | 控制代码质量审查的 system prompt | `Prompts.qualitySystemPrompt` |
 
-**🆕 代码质量扫描（0.8.0 新增）**
+**代码质量扫描**
 
 | 配置项 | 说明 | 默认值 |
 |--------|------|--------|
 | 启用代码质量扫描 | 扫描时是否追加质量检查（与扫描窗口的 checkbox 共享同一个值） | 开 |
+| **覆盖度扫描并发度** | 覆盖度扫描分批并发的 LLM 调用数 | `3` |
 
 > 💡 质量扫描开关在 Settings 面板和扫描窗口两处都能配置，指向同一个持久化值，任一处修改另一处同步。
 
@@ -200,7 +191,7 @@
 .\gradlew.bat clean buildPlugin --rerun-tasks
 ```
 
-产物：`build/distributions/diffsense-idea-0.8.0.zip`
+产物：`build/distributions/diffsense-idea-1.0.0.zip`
 
 ### 调试运行
 
@@ -220,7 +211,7 @@
 | Code Review | 判断 PR 是否完整覆盖需求 |
 | 需求评审 | 把长文档拆解成可验收的条目 |
 | 迭代回顾 | 统计每个迭代的需求覆盖率 |
-| 🆕 代码质量把关 | 扫描 diff 中的 bug / 安全 / 性能 / 异味，提前发现问题 |
+| 代码质量把关 | 扫描 diff 中的 bug / 安全 / 性能 / 异味，提前发现问题 |
 
 ---
 
@@ -232,21 +223,21 @@
 │  ├─ DiffSenseToolWindowPanel（三 Tab 主面板）│
 │  │   ├─ RequirementTable（可编辑需求表格）   │
 │  │   ├─ CoverageResultTable（覆盖度结果）    │
-│  │   ├─ QualityResultTable（质量问题结果）🆕 │
+│  │   ├─ QualityResultTable（质量问题结果）   │
 │  │   └─ ScanLogPanel（实时日志）             │
 │  └─ DiffSenseSettingsPanel（配置 + prompt）  │
 ├─────────────────────────────────────────────┤
 │  Core Layer (纯 Kotlin)                     │
 │  ├─ RequirementParser  ← 并行 parse（协程）  │
 │  ├─ CoverageScanner    ← scan 阶段           │
-│  ├─ QualityScanner     ← quality 阶段 🆕     │
+│  ├─ QualityScanner     ← quality 阶段        │
 │  ├─ LLMClient          ← HTTP 调用           │
 │  ├─ MarkdownSplitter   ← 文档切片            │
 │  └─ DiffCollector      ← Git4Idea            │
 ├─────────────────────────────────────────────┤
 │  Infra Layer                                │
 │  ├─ DiffSenseSettings（持久化配置 + prompt） │
-│  ├─ TokenStats（parse / scan / quality）🆕  │
+│  ├─ TokenStats（parse / scan / quality）     │
 │  └─ ReportExporter                          │
 └─────────────────────────────────────────────┘
 ```
@@ -270,7 +261,7 @@
     │   │   ├── MarkdownSplitter.kt
     │   │   ├── Models.kt
     │   │   ├── Prompts.kt                ← 三套系统提示词常量
-    │   │   ├── QualityScanner.kt         ← 🆕 代码质量扫描器
+    │   │   ├── QualityScanner.kt         ← 代码质量扫描器
     │   │   ├── RequirementParser.kt       ← 并行版本
     │   │   └── TokenStats.kt             ← parse/scan/quality 三阶段
     │   ├── git/                  # Pre-commit 集成
@@ -283,7 +274,7 @@
     │   │   └── DiffSenseSettingsPanel.kt  ← 含 prompt 编辑 + 质量开关
     │   └── ui/                   # UI 组件
     │       ├── CoverageResultTable.kt
-    │       ├── QualityResultTable.kt     ← 🆕 质量问题表格
+    │       ├── QualityResultTable.kt     ← 质量问题表格
     │       ├── RequirementTable.kt        ← 可编辑需求表格
     │       ├── ScanLogPanel.kt            ← 实时日志面板
     │       └── toolwindow/
