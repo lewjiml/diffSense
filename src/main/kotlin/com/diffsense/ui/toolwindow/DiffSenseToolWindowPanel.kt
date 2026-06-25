@@ -25,6 +25,11 @@ import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
 import java.awt.BorderLayout
 import java.awt.FlowLayout
 import java.io.File
@@ -514,30 +519,44 @@ class DiffSenseToolWindowPanel(
                     }
                     logPanel.appendLine("收集到 diff：${diff.length} 字符")
 
-                    val scanner = CoverageScanner(config, indicator)
-                    val report = scanner.scan(
-                        requirements = doc.requirements.filter { it.enabled },
-                        diff = diff,
-                        module = doc.module,
-                        onProgress = { line -> logPanel.appendLine(line) },
-                    )
-                    lastReport = report
+                    // v0.9.0：Coverage + Quality 并行执行（之前是串行）
+                    logPanel.appendLine("── 并行扫描启动 ──")
+                    val enabledReqs = doc.requirements.filter { it.enabled }
 
-                    // v0.8.0：代码质量扫描（可选）
-                    var qualityReport: QualityReport? = null
-                    if (runQuality) {
-                        logPanel.appendLine("── 代码质量扫描 ──")
-                        val qScanner = QualityScanner(config, indicator)
-                        qualityReport = qScanner.scan(
-                            diff = diff,
-                            onProgress = { line -> logPanel.appendLine(line) },
-                        )
-                        lastQualityReport = qualityReport
-                    } else {
-                        lastQualityReport = null
-                        logPanel.appendLine("ℹ 已跳过代码质量扫描（开关未开启）")
+                    val (report, qualityReport) = runBlocking {
+                        coroutineScope {
+                            val coverageDef = async(Dispatchers.IO) {
+                                logPanel.appendLine("▶ [覆盖度] 开始：${enabledReqs.size} 条需求")
+                                val scanner = CoverageScanner(config, indicator)
+                                scanner.scan(
+                                    requirements = enabledReqs,
+                                    diff = diff,
+                                    module = doc.module,
+                                    onProgress = { line -> logPanel.appendLine(line) },
+                                )
+                            }
+                            val qualityDef = if (runQuality) {
+                                async(Dispatchers.IO) {
+                                    logPanel.appendLine("▶ [质量] 开始扫描 diff")
+                                    val qScanner = QualityScanner(config, indicator)
+                                    qScanner.scan(
+                                        diff = diff,
+                                        onProgress = { line -> logPanel.appendLine(line) },
+                                    )
+                                }
+                            } else {
+                                null
+                            }
+                            coverageDef.await() to (qualityDef?.await())
+                        }
                     }
 
+                    lastReport = report
+                    lastQualityReport = qualityReport
+                    if (!runQuality) {
+                        logPanel.appendLine("ℹ 已跳过代码质量扫描（开关未开启）")
+                    }
+                    logPanel.appendLine("■ 并行扫描结束")
                     logPanel.appendLine(TokenStats.report())
 
                     ApplicationManager.getApplication().invokeLater {
@@ -665,6 +684,19 @@ class DiffSenseToolWindowPanel(
      * 供外部 Action 获取当前需求源（lastDocument 优先，否则读 JSON 文件）
      */
     fun resolveRequirementsForAction(): RequirementDocument? = resolveRequirements()
+
+    /**
+     * v0.9.0：供 Pre-commit handler 读取用户在扫描 Tab 选择的 requirements.json 路径
+     *
+     * 返回值：
+     *   - 非空字符串：用户选择的 JSON 文件绝对路径
+     *   - 空：用户未选择（此时 pre-commit 会回退到项目根目录查找）
+     */
+    fun getReqJsonPath(): String {
+        val raw = reqJsonField.text.trim()
+        // "(使用上次拆解结果：...)" 这种占位文本不算路径
+        return if (raw.isNotEmpty() && !raw.startsWith("(")) raw else ""
+    }
 
     /**
      * 供外部 Action（如 Editor 右键扫描）把扫描结果推送到扫描 Tab

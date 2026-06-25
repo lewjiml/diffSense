@@ -82,21 +82,55 @@ object DiffCollector {
         return sb.toString()
     }
 
-    /** 收集暂存区 diff（pre-commit 场景） */
-    fun collectStagedDiff(project: Project): String {
-        val repo = findFirstRepo(project) ?: return ""
-        return try {
-            runGit(repo, "diff", "--cached", "--stat") +
-                "\n" + runGit(repo, "diff", "--cached")
-        } catch (e: Exception) {
-            log.warn("收集 staged diff 失败: ${e.message}")
-            ""
+    /**
+     * 收集暂存区 diff（pre-commit 场景）
+     *
+     * v0.9.0 修复（2.txt 问题 3）：改为遍历所有 Git 仓库聚合 staged diff，
+     * 与 [collectDiff] 保持一致，避免多模块项目只取第一个仓库导致遗漏。
+     */
+    fun collectStagedDiff(
+        project: Project,
+        onProgress: ((String) -> Unit)? = null,
+    ): String {
+        val repos = GitUtil.getRepositories(project)
+        if (repos.isEmpty()) {
+            log.warn("[staged] 未找到任何 Git 仓库")
+            onProgress?.invoke("⚠ [pre-commit] 未找到任何 Git 仓库")
+            return ""
         }
-    }
+        onProgress?.invoke("[pre-commit] 发现 ${repos.size} 个 Git 仓库，开始聚合 staged diff")
 
-    /** 兼容旧调用：返回第一个仓库 */
-    private fun findFirstRepo(project: Project): GitRepository? =
-        GitUtil.getRepositories(project).firstOrNull()
+        val sb = StringBuilder()
+        var totalFiles = 0
+        var includedRepos = 0
+        for ((idx, repo) in repos.withIndex()) {
+            val repoName = repoName(repo)
+            onProgress?.invoke("→ [${idx + 1}/${repos.size}] 扫描暂存区：$repoName")
+            val diff = try {
+                runGit(repo, "diff", "--cached", "--stat") +
+                    "\n" + runGit(repo, "diff", "--cached")
+            } catch (e: Exception) {
+                log.warn("[staged] 收集仓库 $repoName staged diff 失败: ${e.message}")
+                onProgress?.invoke("⚠ [pre-commit] 仓库 $repoName staged diff 失败：${e.message}")
+                ""
+            }
+            if (diff.isBlank()) continue
+            includedRepos++
+            val files = countChangedFiles(diff)
+            totalFiles += files
+            sb.append("\n")
+            sb.append("diff --repo $repoName (${files} files, staged)\n")
+            sb.append(diff)
+            if (!diff.endsWith("\n")) sb.append("\n")
+        }
+
+        if (sb.isEmpty()) {
+            onProgress?.invoke("ℹ [pre-commit] 所有仓库暂存区均为空")
+            return ""
+        }
+        onProgress?.invoke("✓ [pre-commit] 聚合完成：$includedRepos 个仓库，共 $totalFiles 个文件改动")
+        return sb.toString()
+    }
 
     /**
      * 单仓库的 diff（问题 5a：git diff HEAD；问题 5b：pathspec 排除）

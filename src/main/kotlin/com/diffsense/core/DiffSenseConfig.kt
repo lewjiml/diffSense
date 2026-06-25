@@ -34,10 +34,30 @@ data class DiffSenseConfig(
     /**
      * 需求拆解阶段的并发度（同时调用 LLM 的请求数）
      *
-     * 用户可在 Settings → Tools → DiffSense 中调整。
+     * 用户可在 Settings → Tools → AI DiffSense 中调整。
      * 默认 3，避免对 API 服务器造成过大压力。
      */
     val parseConcurrency: Int = 3,
+
+    /**
+     * 覆盖度扫描阶段的并发度（需求分批并发调用 LLM）
+     *
+     * v0.9.0 新增：需求较多时按此值分批，每批并发调用 LLM。
+     * 默认 3；需求总数 ≤ 此值时自动降为单批，无额外开销。
+     */
+    val scanConcurrency: Int = 3,
+
+    // ---- v0.8.0 新增：提示词（用户可在 Settings 自定义） ----
+    /** 需求拆解系统提示词 */
+    val parsePrompt: String = Prompts.parseSystemPrompt,
+    /** 覆盖度扫描系统提示词 */
+    val scanPrompt: String = Prompts.scanSystemPrompt,
+    /** 代码质量扫描系统提示词 */
+    val qualityPrompt: String = Prompts.qualitySystemPrompt,
+
+    // ---- v0.8.0 新增：代码质量扫描开关 ----
+    /** 是否启用代码质量扫描（Settings 与扫描窗口共享同一持久化值） */
+    val qualityScanEnabled: Boolean = true,
 ) {
     enum class Severity(val label: String, val value: String) {
         STRICT("严格（致命+严重）", "strict"),

@@ -28,6 +28,13 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <em>0.9.0</em><br/>
+        - 扫描效率优化：CoverageScanner 与 QualityScanner 并行执行<br/>
+        - CoverageScanner 支持分批并发扫描，新增「覆盖度扫描并发度」配置项<br/>
+        - LLMClient HttpClient 改为全局共享单例，减少 TCP/TLS 握手开销<br/>
+        - 修复 Pre-commit 拦截：跳过原因 now 推送到 Tool Window 日志面板<br/>
+        - Pre-commit 支持读取 Tool Window 中选择的需求 JSON 路径<br/>
+        - collectStagedDiff 改为多仓库聚合，修复多模块项目取错仓库的问题<br/>
         <em>0.8.0</em><br/>
         - 插件更名为「AI DiffSense」<br/>
         - 新增代码质量扫描：扫描 diff 中的潜在 bug / 代码异味 / 安全风险 / 性能问题<br/>

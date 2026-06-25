@@ -25,6 +25,14 @@ class DiffSenseToolWindowService(val project: Project) {
         panel?.showScanReport(report, requirements)
     }
 
+    /**
+     * v0.9.0：获取用户在扫描 Tab 选择的 requirements.json 路径
+     *
+     * 供 Pre-commit handler 使用：用户可能选了非标准路径的 JSON，
+     * 这里返回其选择；未选则返回空串（调用方回退到项目根目录查找）。
+     */
+    fun getReqJsonPath(): String = panel?.getReqJsonPath() ?: ""
+
     companion object {
         fun getInstance(project: Project): DiffSenseToolWindowService {
             return project.getService(DiffSenseToolWindowService::class.java)

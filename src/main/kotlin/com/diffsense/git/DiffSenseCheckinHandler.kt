@@ -55,6 +55,12 @@ class DiffSenseCheckinHandler(
      * 返回结果：
      *   - ReturnResult.COMMIT：继续提交
      *   - ReturnResult.CANCEL：取消提交
+     *
+     * v0.9.0 修复（2.txt）：
+     *   1. 三条提前 return 分支增加 Tool Window 日志推送，让用户能看到跳过原因
+     *   2. findRequirementsJson 优先读 Tool Window 中用户选择的 JSON 路径
+     *   3. collectStagedDiff 前后增加诊断日志
+     *   4. collectStagedDiff 已改为多仓库聚合
      */
     override fun beforeCheckin(
         executor: com.intellij.openapi.vcs.changes.CommitExecutor?,
@@ -63,18 +69,28 @@ class DiffSenseCheckinHandler(
 
         val project = panel.project
         val settings = DiffSenseSettings.getInstance()
+        val service = DiffSenseToolWindowService.getInstance(project)
 
         // 未启用 Pre-commit 检查，直接放行
         if (!settings.state.preCommitEnabled) {
+            service.appendLog("[pre-commit] ⏭ Pre-commit 拦截未启用，放行提交")
             return CheckinHandler.ReturnResult.COMMIT
         }
 
-        // 检查是否有 requirements.json
-        val reqFile = findRequirementsJson(project)
+        service.appendLog("[pre-commit] ▶ Pre-commit 检查启动")
+
+        // v0.9.0：优先读 Tool Window 中用户选择的 JSON，再回退到项目根目录
+        val reqFile = findRequirementsJson(project, service.getReqJsonPath())
         if (reqFile == null || !reqFile.exists()) {
-            log.info("[pre-commit] 未找到 requirements.json，跳过检查")
+            val msg = if (reqFile == null) {
+                "[pre-commit] ⏭ 未找到 requirements.json（项目根目录、docs/、Tool Window 选择均无效），跳过检查"
+            } else {
+                "[pre-commit] ⏭ 需求文件 ${reqFile.absolutePath} 不存在，跳过检查"
+            }
+            service.appendLog(msg)
             return CheckinHandler.ReturnResult.COMMIT
         }
+        service.appendLog("[pre-commit] • 使用需求文件：${reqFile.absolutePath}")
 
         // 同步执行扫描（在 EDT 上阻塞等待用户决策）
         var result = CheckinHandler.ReturnResult.COMMIT
@@ -84,18 +100,25 @@ class DiffSenseCheckinHandler(
         // 注意：beforeCheckin 是在 EDT 调用，需要用 ProgressManager 同步执行
         try {
             val config = settings.toConfig()
-            val diff = DiffCollector.collectStagedDiff(project)
+
+            service.appendLog("[pre-commit] • 正在收集暂存区 diff...")
+            val diff = DiffCollector.collectStagedDiff(project) { line ->
+                service.appendLog(line)
+            }
             if (diff.isBlank()) {
-                log.info("[pre-commit] 暂存区无改动")
+                service.appendLog("[pre-commit] ⏭ 暂存区无改动，放行提交")
                 return CheckinHandler.ReturnResult.COMMIT
             }
+            service.appendLog("[pre-commit] • 已收集 staged diff：${diff.length} 字符")
 
             val json = reqFile.readText(Charsets.UTF_8)
             val parser = RequirementParser(config)
             val doc = parser.fromJson(json)
+            service.appendLog("[pre-commit] • 载入 ${doc.requirements.size} 条需求（启用 ${doc.requirements.count { it.enabled }} 条）")
 
             TokenStats.reset()
             val scanner = CoverageScanner(config)
+            service.appendLog("[pre-commit] • 开始扫描覆盖度...")
             val report = scanner.scan(
                 requirements = doc.requirements.filter { it.enabled },
                 diff = diff,
@@ -105,12 +128,12 @@ class DiffSenseCheckinHandler(
             uncoveredCount = report.summary.uncovered + report.summary.partial
 
             // 推送结果到 Tool Window 的扫描 Tab 与日志
-            val service = DiffSenseToolWindowService.getInstance(project)
-            service.appendLog("[pre-commit] 扫描完成：覆盖 ${report.summary.covered}/${report.summary.total}，未覆盖 $uncoveredCount 条")
+            service.appendLog("[pre-commit] ✓ 扫描完成：覆盖 ${report.summary.covered}/${report.summary.total}，未覆盖 $uncoveredCount 条")
             service.showReport(report, doc.requirements)
         } catch (e: Exception) {
             error = e.message
             log.warn("[pre-commit] 扫描出错: ${e.message}")
+            service.appendLog("[pre-commit] ✗ 扫描出错：${e.message}")
         }
 
         // 决策：是否拦截
@@ -149,13 +172,22 @@ class DiffSenseCheckinHandler(
         return result
     }
 
-    /** 在项目根目录查找 requirements.json */
-    private fun findRequirementsJson(project: Project): java.io.File? {
+    /**
+     * 查找 requirements.json
+     *
+     * v0.9.0：优先级
+     *   1. Tool Window 中用户手动选择的 JSON 路径（uiPath）
+     *   2. 项目根目录 requirements.json
+     *   3. docs/requirements.json
+     */
+    private fun findRequirementsJson(project: Project, uiPath: String): java.io.File? {
         val basePath = project.basePath ?: return null
-        val candidates = listOf(
-            java.io.File(basePath, "requirements.json"),
-            java.io.File(basePath, "docs/requirements.json"),
-        )
+        val candidates = mutableListOf<java.io.File>()
+        if (uiPath.isNotBlank()) {
+            candidates.add(java.io.File(uiPath))
+        }
+        candidates.add(java.io.File(basePath, "requirements.json"))
+        candidates.add(java.io.File(basePath, "docs/requirements.json"))
         return candidates.firstOrNull { it.exists() }
     }
 }

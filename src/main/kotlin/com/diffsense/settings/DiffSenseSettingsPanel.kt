@@ -48,6 +48,7 @@ class DiffSenseSettingsPanel {
     private val preCommitCheck = JBCheckBox("启用 Pre-commit 拦截", false)
     private val preCommitMaxField = JBTextField().apply { emptyText.text = "0" }
     private val parseConcurrencyField = JBTextField().apply { emptyText.text = "3" }
+    private val scanConcurrencyField = JBTextField().apply { emptyText.text = "3" }
     private val maxTokensField = JBTextField().apply { emptyText.text = "8192" }
 
     // ---- v0.8.0 新增：代码质量扫描开关 ----
@@ -109,6 +110,7 @@ class DiffSenseSettingsPanel {
         .addComponent(preCommitCheck)
         .addLabeledComponent("Pre-commit 最大未覆盖数", preCommitMaxField)
         .addLabeledComponent("需求拆解并发度", parseConcurrencyField)
+        .addLabeledComponent("覆盖度扫描并发度", scanConcurrencyField)
         .addLabeledComponent("最大 token（输出截断时调大）", maxTokensField)
         // ---- 代码质量扫描 ----
         .addSeparator()
@@ -135,6 +137,7 @@ class DiffSenseSettingsPanel {
         preCommitCheck.isSelected = s.preCommitEnabled
         preCommitMaxField.text = s.preCommitMaxUncovered.toString()
         parseConcurrencyField.text = s.parseConcurrency.toString()
+        scanConcurrencyField.text = s.scanConcurrency.toString()
         maxTokensField.text = s.maxTokens.toString()
         qualityScanCheck.isSelected = s.qualityScanEnabled
         parsePromptArea.text = s.parsePrompt
@@ -153,6 +156,7 @@ class DiffSenseSettingsPanel {
         s.preCommitEnabled = preCommitCheck.isSelected
         s.preCommitMaxUncovered = preCommitMaxField.text.trim().toIntOrNull() ?: 0
         s.parseConcurrency = parseConcurrencyField.text.trim().toIntOrNull()?.coerceAtLeast(1) ?: 3
+        s.scanConcurrency = scanConcurrencyField.text.trim().toIntOrNull()?.coerceAtLeast(1) ?: 3
         s.maxTokens = maxTokensField.text.trim().toIntOrNull()?.coerceAtLeast(1024) ?: 8192
         s.qualityScanEnabled = qualityScanCheck.isSelected
         s.parsePrompt = parsePromptArea.text

@@ -33,6 +33,18 @@ class LLMClient(
     private val log = logger<LLMClient>()
     private val gson = Gson()
 
+    companion object {
+        /**
+         * 全局共享 HttpClient（线程安全，JDK 官方推荐复用）
+         *
+         * 复用 TCP 连接 / TLS 握手，在并发调用（parse / scan 分批）场景下
+         * 能显著减少连接建立开销。
+         */
+        private val SHARED_CLIENT: HttpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(15))
+            .build()
+    }
+
     /**
      * 调用 chat/completions 接口
      *
@@ -71,9 +83,7 @@ class LLMClient(
             .POST(HttpRequest.BodyPublishers.ofString(body))
             .build()
 
-        val client = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(15))
-            .build()
+        val client = SHARED_CLIENT
 
         // 同步发送，但通过 indicator 支持取消
         indicator?.checkCanceled()
