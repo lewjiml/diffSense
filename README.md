@@ -1,10 +1,23 @@
-# DiffSense · AI 需求覆盖度审查插件
+# AI DiffSense · AI 需求覆盖度 + 代码质量审查插件
 
-> **让每一行代码改动，都有需求可循。**
+> **让每一行代码改动，都有需求可循、有质量可依。**
 
-一个面向研发团队的 IntelliJ IDEA 插件，把「需求文档 → 结构化需求 → 代码覆盖度」这条链路做成可视化、可交互、可推广的工作流。
+一个面向研发团队的 IntelliJ IDEA 插件，把「需求文档 → 结构化需求 → 代码覆盖度 + 代码质量」这条链路做成可视化、可交互、可推广的工作流。
 
-## 🆕 0.2.0 重大更新
+## 🆕 0.8.0 重大更新
+
+| 改进 | 说明 |
+|------|------|
+| 🏷️ **品牌升级为 AI DiffSense** | 插件名 / UI 文案 / Settings 显示名统一改为「AI DiffSense」（plugin id、包名、存储文件名保持不变，平滑升级） |
+| ⚙️ **系统提示词可配置** | parse / scan / quality 三套 prompt 可在 Settings 面板直接编辑，每个文本框旁有「重置为默认」按钮一键回退到内置常量 |
+| 🛡️ **新增代码质量扫描** | 独立 `QualityScanner`，扫描 diff 中的潜在 bug / 代码异味 / 安全风险 / 性能问题，结果带严重度着色 + 修复建议 |
+| 🔀 **质量扫描双入口开关** | `qualityScanEnabled` 在 Settings 面板和扫描窗口两处都可配置，指向同一个持久化值 |
+| 📊 **Token 统计扩展** | 新增 `QUALITY` 阶段，状态栏显示 `parse / scan / quality` 三段 Token 消耗 |
+| 📝 **导出报告增强** | Markdown 报告附带代码质量问题清单（严重度 / 类别 / 文件 / 描述 / 建议） |
+
+---
+
+## 🆕 0.2.0 更新（历史）
 
 | 改进 | 说明 |
 |------|------|
@@ -23,12 +36,12 @@
 
 1. 打开 IDEA → `File` → `Settings`（Mac：`IntelliJ IDEA` → `Preferences`）
 2. 左侧选 `Plugins` → 顶部点齿轮 ⚙️ → `Install Plugin from Disk...`
-3. 选择 [`build/distributions/diffsense-idea-0.2.0.zip`](file:///e:/all-project/ai-shenhe/ai-initial-review-demo/build/distributions/diffsense-idea-0.2.0.zip)
+3. 选择 [`build/distributions/diffsense-idea-0.8.0.zip`](file:///e:/all-project/ai-shenhe/ai-initial-review-demo/build/distributions/diffsense-idea-0.8.0.zip)
 4. 重启 IDEA
 
 ### 第 2 步：配置 LLM
 
-1. `File` → `Settings` → 左侧 `Tools` → `DiffSense`
+1. `File` → `Settings` → 左侧 `Tools` → `AI DiffSense`
 2. 填写：
    - **API Base URL**：OpenAI 兼容地址（如 `https://api.openai.com/v1`）
    - **Model**：模型名（推荐 `claude-sonnet-4-20250514`）
@@ -54,19 +67,19 @@
 
 | # | 功能 | 位置 | 触发方式 |
 |---|------|------|----------|
-| 1 | **Tool Window（主入口）** | 右侧工具栏图标 / `View` → `Tool Windows` → `DiffSense` | 点击图标打开侧栏 |
+| 1 | **Tool Window（主入口）** | 右侧工具栏图标 / `View` → `Tool Windows` → `AI DiffSense` | 点击图标打开侧栏 |
 | 2 | **审查选中代码** | 编辑器内右键 → 最底部 `审查选中代码覆盖的需求` | 选中代码后右键 |
 | 3 | **Pre-commit 拦截** | Commit 面板（`Ctrl+K`）提交时自动触发 | 点提交按钮时 |
-| 4 | **Settings** | `File` → `Settings` → `Tools` → `DiffSense` | 菜单进入 |
+| 4 | **Settings** | `File` → `Settings` → `Tools` → `AI DiffSense` | 菜单进入 |
 
 ### 找不到入口？排查清单
 
 如果按钮没出现，按顺序检查：
 
-1. **确认插件已启用**：`Settings` → `Plugins` → 已安装 → 找到 `DiffSense` → 确认勾选 ✅
+1. **确认插件已启用**：`Settings` → `Plugins` → 已安装 → 找到 `AI DiffSense` → 确认勾选 ✅
 2. **确认重启过 IDE**：装完插件必须重启
 3. **确认版本兼容**：本插件支持 IDEA 2023.1 ~ 2025.2（build 231 ~ 252.*）。看你的 IDE 版本：`Help` → `About`
-4. **Tool Window 手动激活**：如果右侧没图标，点 `View` → `Tool Windows` → `DiffSense`
+4. **Tool Window 手动激活**：如果右侧没图标，点 `View` → `Tool Windows` → `AI DiffSense`
 
 ---
 
@@ -93,13 +106,20 @@
 
 #### 🔍 扫描 Tab
 - 输入模块名、基线分支（默认 `develop`）
-- 点 `开始扫描` → 自动收集 Git Diff → 送 LLM 判断覆盖度
-- 结果表格展示每条需求的覆盖状态：
+- **🆕 代码质量扫描开关**：勾选后扫描时会额外执行一次质量检查（bug / 安全 / 性能 / 异味），与 Settings 中的开关共享同一个持久化值
+- 点 `开始扫描` → 自动收集 Git Diff → 送 LLM 判断覆盖度（开启质量扫描时再追加一次质量扫描）
+- 覆盖度结果表格展示每条需求的覆盖状态：
   - ✅ 已覆盖（高置信度）
   - ⚠️ 部分覆盖（有缺口）
   - ❌ 未覆盖
 - 顶部摘要条显示覆盖率百分比，按阈值变色（绿 / 橙 / 红）
-- 点 `导出报告` 生成 Markdown 报告到项目根目录
+- **🆕 代码质量问题区**：在覆盖度表格下方，4 列表格展示
+  - 严重度（🔴 高 / 🟡 中 / 🟢 低，着色渲染）
+  - 类别（bug / security / performance / smell）
+  - 文件 + 行号
+  - 描述
+  - 点击行可在底部详情面板查看完整描述 + 修复建议
+- 点 `导出报告` 生成 Markdown 报告（含覆盖度 + 质量问题清单）到项目根目录
 
 #### 📜 日志 Tab
 - **实时输出**解析与扫描全过程
@@ -133,7 +153,9 @@
 
 ## 🔧 配置项详解
 
-`Settings` → `Tools` → `DiffSense`：
+`Settings` → `Tools` → `AI DiffSense`：
+
+**基础配置**
 
 | 配置项 | 说明 | 默认值 |
 |--------|------|--------|
@@ -143,6 +165,24 @@
 | **需求解析并发度** | 拆解需求时的并行 LLM 调用数 | `3` |
 | 启用 Pre-commit 检查 | 提交前是否扫描 | 关 |
 | 最大允许未覆盖数 | Pre-commit 拦截阈值 | `3` |
+
+**🆕 系统提示词（0.8.0 新增）**
+
+每个 prompt 文本框旁都有「重置为默认」按钮，点击后用 `Prompts.kt` 中的内置常量覆盖。
+
+| 配置项 | 说明 | 默认值来源 |
+|--------|------|-----------|
+| 需求拆解 Prompt（parse） | 控制需求拆解的 system prompt | `Prompts.parseSystemPrompt` |
+| 覆盖度扫描 Prompt（scan） | 控制覆盖度判断的 system prompt | `Prompts.scanSystemPrompt` |
+| 代码质量扫描 Prompt（quality） | 控制代码质量审查的 system prompt | `Prompts.qualitySystemPrompt` |
+
+**🆕 代码质量扫描（0.8.0 新增）**
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| 启用代码质量扫描 | 扫描时是否追加质量检查（与扫描窗口的 checkbox 共享同一个值） | 开 |
+
+> 💡 质量扫描开关在 Settings 面板和扫描窗口两处都能配置，指向同一个持久化值，任一处修改另一处同步。
 
 ---
 
@@ -160,7 +200,7 @@
 .\gradlew.bat clean buildPlugin --rerun-tasks
 ```
 
-产物：`build/distributions/diffsense-idea-0.2.0.zip`
+产物：`build/distributions/diffsense-idea-0.8.0.zip`
 
 ### 调试运行
 
@@ -180,6 +220,7 @@
 | Code Review | 判断 PR 是否完整覆盖需求 |
 | 需求评审 | 把长文档拆解成可验收的条目 |
 | 迭代回顾 | 统计每个迭代的需求覆盖率 |
+| 🆕 代码质量把关 | 扫描 diff 中的 bug / 安全 / 性能 / 异味，提前发现问题 |
 
 ---
 
@@ -190,20 +231,22 @@
 │  UI Layer (Kotlin / Swing)                  │
 │  ├─ DiffSenseToolWindowPanel（三 Tab 主面板）│
 │  │   ├─ RequirementTable（可编辑需求表格）   │
-│  │   ├─ CoverageResultTable（扫描结果）      │
+│  │   ├─ CoverageResultTable（覆盖度结果）    │
+│  │   ├─ QualityResultTable（质量问题结果）🆕 │
 │  │   └─ ScanLogPanel（实时日志）             │
-│  └─ DiffSenseSettingsPanel（配置）           │
+│  └─ DiffSenseSettingsPanel（配置 + prompt）  │
 ├─────────────────────────────────────────────┤
 │  Core Layer (纯 Kotlin)                     │
 │  ├─ RequirementParser  ← 并行 parse（协程）  │
 │  ├─ CoverageScanner    ← scan 阶段           │
+│  ├─ QualityScanner     ← quality 阶段 🆕     │
 │  ├─ LLMClient          ← HTTP 调用           │
 │  ├─ MarkdownSplitter   ← 文档切片            │
 │  └─ DiffCollector      ← Git4Idea            │
 ├─────────────────────────────────────────────┤
 │  Infra Layer                                │
-│  ├─ DiffSenseSettings（持久化配置）          │
-│  ├─ TokenStats                              │
+│  ├─ DiffSenseSettings（持久化配置 + prompt） │
+│  ├─ TokenStats（parse / scan / quality）🆕  │
 │  └─ ReportExporter                          │
 └─────────────────────────────────────────────┘
 ```
@@ -226,9 +269,10 @@
     │   │   ├── LLMClient.kt
     │   │   ├── MarkdownSplitter.kt
     │   │   ├── Models.kt
-    │   │   ├── Prompts.kt
+    │   │   ├── Prompts.kt                ← 三套系统提示词常量
+    │   │   ├── QualityScanner.kt         ← 🆕 代码质量扫描器
     │   │   ├── RequirementParser.kt       ← 并行版本
-    │   │   └── TokenStats.kt
+    │   │   └── TokenStats.kt             ← parse/scan/quality 三阶段
     │   ├── git/                  # Pre-commit 集成
     │   │   └── DiffSenseCheckinHandler.kt
     │   ├── icons/                # 图标
@@ -236,9 +280,10 @@
     │   ├── settings/             # 配置面板
     │   │   ├── DiffSenseSettings.kt
     │   │   ├── DiffSenseSettingsConfigurable.kt
-    │   │   └── DiffSenseSettingsPanel.kt
+    │   │   └── DiffSenseSettingsPanel.kt  ← 含 prompt 编辑 + 质量开关
     │   └── ui/                   # UI 组件
     │       ├── CoverageResultTable.kt
+    │       ├── QualityResultTable.kt     ← 🆕 质量问题表格
     │       ├── RequirementTable.kt        ← 可编辑需求表格
     │       ├── ScanLogPanel.kt            ← 实时日志面板
     │       └── toolwindow/
