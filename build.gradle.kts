@@ -43,15 +43,17 @@ tasks {
         }
     }
 
-    // 签名与发布配置：发布到 Marketplace 时再启用
-    // signPlugin {
-    //     certificationChain.set(System.getenv("CERTIFICATE_CHAIN"))
-    //     privateKey.set(System.getenv("PRIVATE_KEY"))
-    //     password.set(System.getenv("PRIVATE_KEY_PASSWORD"))
-    // }
-    // publishPlugin {
-    //     token.set(System.getenv("PUBLISH_TOKEN"))
-    // }
+    // 签名配置：证书文件放在项目 certs/ 目录，密码用环境变量传入
+    signPlugin {
+        certificateChain.set(file("certs/chain.crt").readText())
+        privateKey.set(file("certs/private.key").readText())
+        password.set(providers.environmentVariable("PRIVATE_KEY_PASSWORD"))
+    }
+
+    // 发布配置：token 从环境变量读取，避免硬编码
+    publishPlugin {
+        token.set(providers.environmentVariable("PUBLISH_TOKEN"))
+    }
 
     runIde {
         // 调试时分配更大内存

@@ -1,17 +1,324 @@
-# AI DiffSense · AI 需求覆盖度 + 代码质量审查插件
+# AI DiffSense · AI Requirement Coverage & Code Quality Review Plugin
 
 > **让每一行代码改动，都有需求可循、有质量可依。**
+>
+> **Make every line of code change traceable to a requirement and accountable to quality.**
+
+An IntelliJ IDEA plugin for R&D teams that turns the workflow of *Requirement Document → Structured Requirements → Code Coverage + Code Quality* into a visual, interactive, and scalable process.
+
+[English](#-english) · [中文](#-中文)
+
+---
+
+## 🇬🇧 English
+
+A plugin for IntelliJ IDEA that connects requirement documents to code changes, helping you verify coverage and catch quality issues before they ship.
+
+### ✨ v1.0.0 Features
+
+| Capability | Description |
+|------------|-------------|
+| 📋 **Requirement Parsing** | Splits Markdown requirement docs by `##`/`###`, sends slices to an LLM in parallel, and breaks them down into verifiable structured items |
+| 🎯 **Coverage Scan** | Compares Git Diff against requirements to determine coverage status (Covered / Partial / Uncovered) |
+| 🛡️ **Code Quality Scan** | Independently scans the diff for potential bugs / security risks / performance issues / code smells, with severity + fix suggestions |
+| 🚦 **Pre-commit Interception** | Auto-scans checked files on commit; blocks when uncovered requirements exceed the threshold |
+| 🪟 **Tool Window** | Always-on right-side tool window (Requirements / Scan / Log tabs), non-blocking |
+| ⚡ **Performance** | Coverage and quality scans run in parallel; batched concurrency; shared HttpClient singleton |
+| ⚙️ **Configurable Prompts** | parse / scan / quality prompts are customizable in Settings, with one-click reset |
+
+> 📌 **v1.0.0 key fix**: Pre-commit no longer blindly runs `git diff --cached` (IDEA changelist ≠ git staged, which scanned stale content). It now uses `panel.selectedChanges` to take diffs by file path, ensuring the currently committed version is scanned.
+
+---
+
+### 🚀 Quick Start (3 minutes)
+
+#### Step 1: Install the plugin
+
+1. Open IDEA → `File` → `Settings` (Mac: `IntelliJ IDEA` → `Preferences`)
+2. Left panel: `Plugins` → top gear ⚙️ → `Install Plugin from Disk...`
+3. Select `build/distributions/diffsense-idea-1.0.0.zip`
+4. Restart IDEA
+
+#### Step 2: Configure the LLM
+
+1. `File` → `Settings` → left `Tools` → `AI DiffSense`
+2. Fill in:
+   - **API Base URL**: OpenAI-compatible endpoint (e.g. `https://api.openai.com/v1`)
+   - **Model**: model name (recommended `claude-sonnet-4-20250514`)
+   - **API Key**: fill directly, or leave empty to read from env var `AI_API_KEY`
+   - **Parse Concurrency**: default `3` (higher is faster but uses more API quota)
+3. Click `Apply` / `OK`
+
+> Env vars are also supported: `AI_API_KEY` / `AI_BASE_URL` / `AI_MODEL`
+
+#### Step 3: Use it
+
+1. Click the DiffSense icon in the right toolbar (or `View` → `Tool Windows` → `AI DiffSense`) to open the tool window
+2. In the **Requirements** tab, select a `.md` requirement doc → click `Parse Requirements`
+3. After parsing, you can **edit** the requirement table directly
+4. Switch to the **Scan** tab → select baseline branch → click `Start Scan`
+5. Watch the parse / scan progress in the **Log** tab in real time
+
+---
+
+### 📍 Feature Entry Points
+
+After installation, these entries appear in IDEA:
+
+| # | Feature | Location | Trigger |
+|---|---------|----------|---------|
+| 1 | **Tool Window (main)** | Right toolbar icon / `View` → `Tool Windows` → `AI DiffSense` | Click icon |
+| 2 | **Scan Selection** | Right-click in editor → bottom item | Select code, then right-click |
+| 3 | **Pre-commit** | Commit panel (`Ctrl+K`), triggered on commit | Click commit |
+| 4 | **Settings** | `File` → `Settings` → `Tools` → `AI DiffSense` | Menu |
+
+### Troubleshooting checklist
+
+If buttons don't show up, check in order:
+
+1. **Plugin enabled**: `Settings` → `Plugins` → Installed → find `AI DiffSense` → make sure it's checked ✅
+2. **IDE restarted**: must restart after install
+3. **Version compatible**: supports IDEA 2023.1 ~ 2025.2 (build 231 ~ 252.*). Check your IDE version: `Help` → `About`
+4. **Tool Window activation**: if no icon on the right, click `View` → `Tool Windows` → `AI DiffSense`
+
+---
+
+### 🎯 Feature Details
+
+#### Feature 1: Tool Window (main entry, 3 tabs)
+
+Open via the right toolbar icon or `View` → `Tool Windows` → `DiffSense`.
+
+##### 📋 Requirements tab
+- Select a Markdown requirement doc → click `Parse Requirements`
+- **Parallel parsing**: the doc is sliced by `##` / `###`, multiple slices sent to the LLM at once (concurrency configurable in Settings)
+- Parsed requirements appear in an **editable table**:
+
+  | Enabled | ID | Title | Description | Keywords | Acceptance |
+  |---------|----|-------|-------------|----------|------------|
+  | ☑ | R001 | User login | ... | login, auth | ... |
+
+- The "Enabled" checkbox controls whether a requirement participates in the scan
+- Title / Description / Keywords / Acceptance are **double-click editable**
+- Edits sync back to the in-memory requirement doc
+
+##### 🔍 Scan tab
+- Enter module name, baseline branch (default `develop`)
+- **Code quality scan toggle**: when checked, an extra quality pass runs (bug / security / performance / smell), sharing the same persisted value as in Settings
+- Click `Start Scan` → auto-collect Git Diff → send to LLM to judge coverage (plus an extra quality pass if enabled)
+- Coverage result table shows each requirement's status:
+  - ✅ Covered (high confidence)
+  - ⚠️ Partial (with gaps)
+  - ❌ Uncovered
+- Top summary bar shows coverage percentage, colored by threshold (green / orange / red)
+- **Code quality issues area**: below the coverage table, a 4-column table:
+  - Severity (🔴 High / 🟡 Medium / 🟢 Low, color rendered)
+  - Category (bug / security / performance / smell)
+  - File + line
+  - Description
+  - Click a row to see full description + fix suggestion in the bottom detail panel
+- Click `Export Report` to generate a Markdown report (coverage + quality issues) in the project root
+
+##### 📜 Log tab
+- **Real-time output** of the parse and scan process
+- Includes: slice count, concurrent execution, each LLM call, token stats
+- Monospace font for alignment
+
+#### Feature 2: Scan Selection
+
+Open via: select code in editor → right-click → `Scan Requirements Covered by Selection`
+
+- Auto-opens the Tool Window if not open
+- Reuses the requirements parsed in the Tool Window (parse them first in the Requirements tab)
+- Scans which requirements the selected code covers, in the background
+- Results show in the Scan tab; process is written to the Log tab
+
+#### Feature 3: Pre-commit Interception
+
+Triggered automatically on `Ctrl+K` commit (must be enabled in Settings first)
+
+- Before commit, auto-scans the **files actually checked by the user** (`panel.selectedChanges`), taking staged diffs by file path
+- If uncovered requirements exceed the threshold, a dialog asks whether to continue
+- Scan results and logs are pushed to the Tool Window
+
+**Settings options**:
+- `Enable Pre-commit Interception`: toggle
+- `Max Uncovered`: blocks commit when exceeded
+
+> ⚠️ Pre-commit requires that requirements have been parsed in the Tool Window (or a `requirements.json` exists in the project root)
+
+---
+
+### 🔧 Configuration Reference
+
+`Settings` → `Tools` → `AI DiffSense`:
+
+**Basic**
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| API Base URL | OpenAI-compatible API endpoint | `https://api.openai.com/v1` |
+| Model | Model name | `claude-sonnet-4-20250514` |
+| API Key | API key (empty → read env `AI_API_KEY`) | empty |
+| **Parse Concurrency** | Parallel LLM calls during parsing | `3` |
+| Enable Pre-commit | Whether to scan before commit | off |
+| Max Uncovered | Pre-commit block threshold | `3` |
+
+**System Prompts**
+
+Each prompt textbox has a "Reset to Default" button that overwrites with the built-in constant from `Prompts.kt`.
+
+| Option | Description | Default source |
+|--------|-------------|----------------|
+| Parse Prompt | System prompt for requirement parsing | `Prompts.parseSystemPrompt` |
+| Coverage Scan Prompt | System prompt for coverage judgment | `Prompts.scanSystemPrompt` |
+| Quality Scan Prompt | System prompt for code quality review | `Prompts.qualitySystemPrompt` |
+
+**Code Quality Scan**
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| Enable Quality Scan | Whether to add a quality pass during scan (shares the same value with the scan window checkbox) | on |
+| **Scan Concurrency** | Batched concurrency for coverage scan LLM calls | `3` |
+
+> 💡 The quality scan toggle is available in both the Settings panel and the scan window, pointing to the same persisted value; changing one syncs the other.
+
+---
+
+### 📦 Build from Source
+
+#### Prerequisites
+
+- JDK 17+
+- IntelliJ IDEA (for `runIde` debugging)
+- Network access to Maven Central (for Gradle plugins and Gson)
+
+#### Build the zip
+
+```powershell
+.\gradlew.bat clean buildPlugin --rerun-tasks
+```
+
+Output: `build/distributions/diffsense-idea-1.0.0.zip`
+
+#### Debug run
+
+```powershell
+.\gradlew.bat runIde
+```
+
+Launches an IDEA sandbox instance with DiffSense loaded.
+
+---
+
+### 🎯 Use Cases
+
+| Scenario | Value |
+|----------|-------|
+| Pre-commit self-check | Block uncovered requirements before they ship |
+| Code Review | Judge whether a PR fully covers requirements |
+| Requirement review | Break long docs into verifiable items |
+| Iteration retrospective | Track requirement coverage per iteration |
+| Quality gate | Scan diffs for bug / security / performance / smell issues early |
+
+---
+
+### 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│  UI Layer (Kotlin / Swing)                  │
+│  ├─ DiffSenseToolWindowPanel (3-tab main)   │
+│  │   ├─ RequirementTable (editable table)   │
+│  │   ├─ CoverageResultTable                 │
+│  │   ├─ QualityResultTable                  │
+│  │   └─ ScanLogPanel (real-time log)        │
+│  └─ DiffSenseSettingsPanel (config+prompts) │
+├─────────────────────────────────────────────┤
+│  Core Layer (pure Kotlin)                   │
+│  ├─ RequirementParser  ← parallel parse     │
+│  ├─ CoverageScanner    ← scan stage         │
+│  ├─ QualityScanner     ← quality stage      │
+│  ├─ LLMClient          ← HTTP calls         │
+│  ├─ MarkdownSplitter   ← doc slicing        │
+│  └─ DiffCollector      ← Git4Idea           │
+├─────────────────────────────────────────────┤
+│  Infra Layer                                │
+│  ├─ DiffSenseSettings (persisted config)    │
+│  ├─ TokenStats (parse / scan / quality)     │
+│  └─ ReportExporter                          │
+└─────────────────────────────────────────────┘
+```
+
+### 📁 Project Structure
+
+```
+.
+├── build.gradle.kts              # Gradle build
+├── settings.gradle.kts
+├── gradle.properties             # compatibility range, etc.
+└── src/main/
+    ├── kotlin/com/diffsense/
+    │   ├── actions/              # Action entries
+    │   │   └── ScanSelectionAction.kt    ← editor right-click
+    │   ├── core/                 # core business logic
+    │   │   ├── CoverageScanner.kt
+    │   │   ├── DiffCollector.kt
+    │   │   ├── DiffSenseConfig.kt
+    │   │   ├── LLMClient.kt
+    │   │   ├── MarkdownSplitter.kt
+    │   │   ├── Models.kt
+    │   │   ├── Prompts.kt                ← three system prompt constants
+    │   │   ├── QualityScanner.kt         ← code quality scanner
+    │   │   ├── RequirementParser.kt       ← parallel version
+    │   │   └── TokenStats.kt             ← parse/scan/quality stages
+    │   ├── git/                  # Pre-commit integration
+    │   │   └── DiffSenseCheckinHandler.kt
+    │   ├── icons/                # icons
+    │   │   └── DiffSenseIcons.kt
+    │   ├── settings/             # config panel
+    │   │   ├── DiffSenseSettings.kt
+    │   │   ├── DiffSenseSettingsConfigurable.kt
+    │   │   └── DiffSenseSettingsPanel.kt  ← prompt editor + quality toggle
+    │   └── ui/                   # UI components
+    │       ├── CoverageResultTable.kt
+    │       ├── QualityResultTable.kt     ← quality issue table
+    │       ├── RequirementTable.kt        ← editable requirement table
+    │       ├── ScanLogPanel.kt            ← real-time log panel
+    │       └── toolwindow/
+    │           ├── DiffSenseToolWindowFactory.kt
+    │           ├── DiffSenseToolWindowPanel.kt  ← 3-tab main panel
+    │           └── DiffSenseToolWindowService.kt
+    └── resources/META-INF/
+        └── plugin.xml            # plugin descriptor (registers all entries)
+```
+
+### 🔄 Compatibility
+
+- **IDEA version**: 2023.1 (build 231) ~ 2025.2 (build 252.*)
+- **Required plugin**: `Git4Idea` (Git integration, bundled with IDEA)
+- **JDK**: 17+ (build time) / runtime provided by IDEA's bundled JBR
+
+To change the compatibility range: edit `pluginSinceBuild` / `pluginUntilBuild` in `gradle.properties`, **and also** update `patchPluginXml { sinceBuild.set(...) / untilBuild.set(...) }` in `build.gradle.kts`, then rebuild.
+
+### 📄 License
+
+MIT
+
+---
+
+## 🇨🇳 中文
 
 一个面向研发团队的 IntelliJ IDEA 插件，把「需求文档 → 结构化需求 → 代码覆盖度 + 代码质量」这条链路做成可视化、可交互、可推广的工作流。
 
-## � v1.0.0 正式版
+### ✨ v1.0.0 正式版
 
 | 能力 | 说明 |
 |------|------|
 | 📋 **需求拆解** | 把 Markdown 需求文档按 `##`/`###` 切片并行送 LLM，拆解成可验收的结构化条目 |
 | 🎯 **覆盖度扫描** | 对比 Git Diff 与需求，判断每条需求的覆盖状态（已覆盖 / 部分 / 未覆盖） |
 | 🛡️ **代码质量扫描** | 独立扫描 diff 中的潜在 bug / 安全风险 / 性能问题 / 代码异味，带严重度 + 修复建议 |
-| � **Pre-commit 拦截** | 提交时自动扫描勾选文件，未覆盖需求超阈值则拦截，从源头守住质量 |
+| 🚦 **Pre-commit 拦截** | 提交时自动扫描勾选文件，未覆盖需求超阈值则拦截，从源头守住质量 |
 | 🪟 **Tool Window** | 右侧常驻工具窗（需求 / 扫描 / 日志 三 Tab），不阻塞 IDEA |
 | ⚡ **效率优化** | 覆盖度与质量扫描并行、分批并发、HttpClient 共享单例 |
 | ⚙️ **提示词可配置** | parse / scan / quality 三套 Prompt 可在 Settings 自定义，一键重置 |
@@ -20,16 +327,16 @@
 
 ---
 
-## 🚀 快速上手（3 分钟）
+### 🚀 快速上手（3 分钟）
 
-### 第 1 步：安装插件
+#### 第 1 步：安装插件
 
 1. 打开 IDEA → `File` → `Settings`（Mac：`IntelliJ IDEA` → `Preferences`）
 2. 左侧选 `Plugins` → 顶部点齿轮 ⚙️ → `Install Plugin from Disk...`
-3. 选择 [`build/distributions/diffsense-idea-1.0.0.zip`](file:///e:/all-project/ai-shenhe/ai-initial-review-demo/build/distributions/diffsense-idea-1.0.0.zip)
+3. 选择 `build/distributions/diffsense-idea-1.0.0.zip`
 4. 重启 IDEA
 
-### 第 2 步：配置 LLM
+#### 第 2 步：配置 LLM
 
 1. `File` → `Settings` → 左侧 `Tools` → `AI DiffSense`
 2. 填写：
@@ -41,7 +348,7 @@
 
 > 也支持环境变量：`AI_API_KEY` / `AI_BASE_URL` / `AI_MODEL`
 
-### 第 3 步：使用
+#### 第 3 步：使用
 
 1. 右侧工具栏点 DiffSense 图标（或 `View` → `Tool Windows` → `AI DiffSense`）打开工具窗
 2. 在「需求」Tab 选需求文档 `.md` → 点 `拆解需求`
@@ -51,7 +358,7 @@
 
 ---
 
-## 📍 所有功能入口
+### 📍 所有功能入口
 
 插件安装后，以下入口会出现在 IDEA 里：
 
@@ -62,7 +369,7 @@
 | 3 | **Pre-commit 拦截** | Commit 面板（`Ctrl+K`）提交时自动触发 | 点提交按钮时 |
 | 4 | **Settings** | `File` → `Settings` → `Tools` → `AI DiffSense` | 菜单进入 |
 
-### 找不到入口？排查清单
+#### 找不到入口？排查清单
 
 如果按钮没出现，按顺序检查：
 
@@ -73,15 +380,15 @@
 
 ---
 
-## 🎯 三大功能详解
+### 🎯 三大功能详解
 
-### 功能 1：Tool Window（主入口，三 Tab）
+#### 功能 1：Tool Window（主入口，三 Tab）
 
 **打开方式**：右侧工具栏点 DiffSense 图标，或 `View` → `Tool Windows` → `DiffSense`
 
 工具窗内含三个 Tab：
 
-#### 📋 需求 Tab
+##### 📋 需求 Tab
 - 选择 Markdown 需求文档 → 点 `拆解需求`
 - **并行解析**：文档按 `##` / `###` 切片，多片同时送 LLM（并发度可在 Settings 配置）
 - 拆解出的需求以**可编辑表格**呈现：
@@ -94,7 +401,7 @@
 - 标题 / 描述 / 关联词 / 验收标准**双击即可编辑**
 - 编辑会自动同步回内存中的需求文档
 
-#### 🔍 扫描 Tab
+##### 🔍 扫描 Tab
 - 输入模块名、基线分支（默认 `develop`）
 - **代码质量扫描开关**：勾选后扫描时会额外执行一次质量检查（bug / 安全 / 性能 / 异味），与 Settings 中的开关共享同一个持久化值
 - 点 `开始扫描` → 自动收集 Git Diff → 送 LLM 判断覆盖度（开启质量扫描时再追加一次质量扫描）
@@ -111,12 +418,12 @@
   - 点击行可在底部详情面板查看完整描述 + 修复建议
 - 点 `导出报告` 生成 Markdown 报告（含覆盖度 + 质量问题清单）到项目根目录
 
-#### 📜 日志 Tab
+##### 📜 日志 Tab
 - **实时输出**解析与扫描全过程
 - 包括：切片数、并发执行、每片 LLM 调用、Token 统计
 - 等宽字体，便于对齐
 
-### 功能 2：审查选中代码
+#### 功能 2：审查选中代码
 
 **打开方式**：编辑器里选中一段代码 → 右键 → `审查选中代码覆盖的需求`
 
@@ -125,7 +432,7 @@
 - 后台扫描选中代码覆盖了哪些需求
 - 结果直接展示在「扫描」Tab，过程写入「日志」Tab
 
-### 功能 3：Pre-commit 拦截
+#### 功能 3：Pre-commit 拦截
 
 **打开方式**：`Ctrl+K` 提交代码时自动触发（需先在 Settings 启用）
 
@@ -141,7 +448,7 @@
 
 ---
 
-## 🔧 配置项详解
+### 🔧 配置项详解
 
 `Settings` → `Tools` → `AI DiffSense`：
 
@@ -177,15 +484,15 @@
 
 ---
 
-## 📦 从源码构建
+### 📦 从源码构建
 
-### 前置要求
+#### 前置要求
 
 - JDK 17+
 - IntelliJ IDEA（用于 `runIde` 调试）
 - 网络可访问 Maven Central（拉 Gradle 插件和 Gson）
 
-### 构建 zip
+#### 构建 zip
 
 ```powershell
 .\gradlew.bat clean buildPlugin --rerun-tasks
@@ -193,7 +500,7 @@
 
 产物：`build/distributions/diffsense-idea-1.0.0.zip`
 
-### 调试运行
+#### 调试运行
 
 ```powershell
 .\gradlew.bat runIde
@@ -203,7 +510,7 @@
 
 ---
 
-## 🎯 使用场景
+### 🎯 使用场景
 
 | 场景 | 价值 |
 |------|------|
@@ -215,7 +522,7 @@
 
 ---
 
-## 🏗️ 架构
+### 🏗️ 架构
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -242,7 +549,7 @@
 └─────────────────────────────────────────────┘
 ```
 
-## 📁 项目结构
+### 📁 项目结构
 
 ```
 .
@@ -285,14 +592,14 @@
         └── plugin.xml            # 插件描述（注册所有入口）
 ```
 
-## 🔄 兼容范围
+### 🔄 兼容范围
 
 - **IDEA 版本**：2023.1 (build 231) ~ 2025.2 (build 252.*)
 - **依赖插件**：`Git4Idea`（Git 集成，IDEA 自带）
 - **JDK**：17+（构建时）/ 运行时由 IDEA 内置 JBR 提供
 
-如需修改兼容范围：编辑 [`gradle.properties`](file:///e:/all-project/ai-shenhe/ai-initial-review-demo/gradle.properties) 的 `pluginSinceBuild` / `pluginUntilBuild`，**同时**修改 [`build.gradle.kts`](file:///e:/all-project/ai-shenhe/ai-initial-review-demo/build.gradle.kts) 中 `patchPluginXml { sinceBuild.set(...) / untilBuild.set(...) }`，然后重新构建。
+如需修改兼容范围：编辑 `gradle.properties` 的 `pluginSinceBuild` / `pluginUntilBuild`，**同时**修改 `build.gradle.kts` 中 `patchPluginXml { sinceBuild.set(...) / untilBuild.set(...) }`，然后重新构建。
 
-## 📄 License
+### 📄 License
 
 MIT

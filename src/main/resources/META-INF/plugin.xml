@@ -23,7 +23,7 @@
             <li>🔍 扫描代码：判断代码改动对需求的覆盖情况</li>
             <li>🐞 代码质量：扫描 diff 中的潜在 bug / 代码异味 / 安全风险</li>
             <li>🪝 Pre-commit：提交前自动检查未覆盖需求</li>
-            <li>🎨 Tool Window：历史报告与需求库管理</li>
+            <li>🎨 Tool Window：右侧常驻工具窗，管理需求、运行扫描与查看日志（三 Tab）</li>
         </ul>
     ]]></description>
 
