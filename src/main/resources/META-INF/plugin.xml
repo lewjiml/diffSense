@@ -16,14 +16,13 @@
     <idea-version since-build="231" until-build="252.*"/>
 
     <description><![CDATA[
-        <h2>AI DiffSense · AI Requirement Coverage &amp; Code Quality Review</h2>
-        <p>AI DiffSense is an IntelliJ IDEA plugin for requirement coverage analysis and code quality review. It decomposes requirement documents into structured items, scans git diff to detect uncovered requirements, and reports potential bugs, code smells, and security risks before commit.</p>
+        AI DiffSense is an IntelliJ IDEA plugin for requirement coverage analysis and code quality review. It decomposes requirement documents into structured items, scans git diff to detect uncovered requirements, and reports potential bugs, code smells, and security risks before commit.
         <ul>
-            <li>📋 Split requirements: auto-decompose requirement docs into structured items</li>
-            <li>🔍 Scan code: detect requirement coverage from git diff</li>
-            <li>🐞 Code quality: find bugs / code smells / security risks in diff</li>
-            <li>🪝 Pre-commit: block commit when requirements are uncovered</li>
-            <li>🎨 Tool Window: manage requirements, run scans, and view logs (three tabs)</li>
+            <li>Split requirements: auto-decompose requirement docs into structured items</li>
+            <li>Scan code: detect requirement coverage from git diff</li>
+            <li>Code quality: find bugs, code smells, and security risks in diff</li>
+            <li>Pre-commit: block commit when requirements are uncovered</li>
+            <li>Tool Window: manage requirements, run scans, and view logs</li>
         </ul>
     ]]></description>
 
