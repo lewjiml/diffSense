@@ -8,22 +8,22 @@
     3. Editor 右键菜单 —— 审查选中代码覆盖了哪些需求
 -->
 <idea-plugin>
-    <id>com.diffsense.intellij</id>
+    <id>com.diffsense.ai</id>
     <name>AI DiffSense</name>
-    <vendor email="Liu_jiam@163.com" url="https://gitee.com/jiaming-pot/diffsense-jm">AI DiffSense</vendor>
+    <vendor email="Liu_jiam@163.com" url="https://github.com/lewjiml/diffSense">AI DiffSense</vendor>
 
     <!-- 明确兼容范围：2023.1 (231) ~ 2025.2 (252) -->
     <idea-version since-build="231" until-build="252.*"/>
 
     <description><![CDATA[
-        <h2>AI DiffSense · AI 需求覆盖度 & 代码质量审查</h2>
-        <p>让每一行代码改动，都有需求可循。</p>
+        <h2>AI DiffSense · AI Requirement Coverage &amp; Code Quality Review</h2>
+        <p>AI DiffSense is an IntelliJ IDEA plugin for requirement coverage analysis and code quality review. It decomposes requirement documents into structured items, scans git diff to detect uncovered requirements, and reports potential bugs, code smells, and security risks before commit.</p>
         <ul>
-            <li>📋 分割需求：从需求文档自动拆解成结构化需求条目</li>
-            <li>🔍 扫描代码：判断代码改动对需求的覆盖情况</li>
-            <li>🐞 代码质量：扫描 diff 中的潜在 bug / 代码异味 / 安全风险</li>
-            <li>🪝 Pre-commit：提交前自动检查未覆盖需求</li>
-            <li>🎨 Tool Window：右侧常驻工具窗，管理需求、运行扫描与查看日志（三 Tab）</li>
+            <li>📋 Split requirements: auto-decompose requirement docs into structured items</li>
+            <li>🔍 Scan code: detect requirement coverage from git diff</li>
+            <li>🐞 Code quality: find bugs / code smells / security risks in diff</li>
+            <li>🪝 Pre-commit: block commit when requirements are uncovered</li>
+            <li>🎨 Tool Window: manage requirements, run scans, and view logs (three tabs)</li>
         </ul>
     ]]></description>
 
